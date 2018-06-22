@@ -1,0 +1,232 @@
+---
+title: "Lineage Tracing Quality Control Report"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: united
+    highlight: tango
+---
+***
+
+# Load Data
+```{r, message=FALSE}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+# source("functions.R")
+
+# Load Data
+dataList <- readRDS("../data/Robjects/ExpressionList.rds")
+m <- dataList[["counts"]]
+pD <- dataList[["phenoData"]]
+fD <- dataList[["featureData"]]
+rm(dataList)
+```
+
+# Number of Cells
+We sequenced slightly less cells than expected, with a total of `r ncol(m)` cells.
+```{r}
+kable(t(as.matrix(table(pD$SampleID))))
+kable(t(as.matrix(table(pD$Condition))))
+```
+
+## High reproducibility between technical replicates
+```{r}
+fp <- group_by(pD[!pD$AnimalHadTumor,], SampleID) %>%
+    summarize(Number=n())
+fp$Condition <- as.factor(substring(fp$SampleID,1,nchar(fp$SampleID)-1))
+ggplot(fp, aes(x=Condition, y=Number)) +
+    geom_point()
+```
+
+# Quality Control
+```{r}
+# Sequencing Depth and Genes detected
+pD$UmiSums<- colSums(m)
+pD$GenesDetected <- colSums(m!=0)
+genesDetected <- ggplot(pD, aes(x=SampleID,y=GenesDetected,fill=Condition)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of genes detected") +
+    ggtitle("Number of Genes detected") +
+    theme_bw()
+LibrarySize <- ggplot(pD, aes(x=SampleID,y=UmiSums,fill=Condition)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of molecules") +
+    ggtitle("Number of Molecules") +
+    theme_bw()
+
+# Genewise QC
+ntop <- 50 
+mRel <- t(t(m)/colSums(m))
+rownames(mRel)  <- fD$symbol
+topExpressed <- apply(mRel,1,median)
+names(topExpressed) <- rownames(mRel)
+topExpressed <- topExpressed %>% sort(.,decreasing=TRUE) %>% names
+plotData <- as.matrix(t(mRel)[,topExpressed[1:ntop]]) %>%
+    reshape2::melt() %>%
+    rename(Cell=Var1,
+	   Gene=Var2,
+	   RelativeExpression=value)
+topGenes <- ggplot(plotData, aes(x=Gene, y=RelativeExpression)) +
+    geom_boxplot() +
+    coord_flip() +
+    ggtitle("Most highly expressed genes") +
+    theme_bw()
+freqOfExp <- m!=0
+rownames(freqOfExp) <- fD$symbol
+freqOfExp <- sort(rowSums(freqOfExp)/ncol(freqOfExp),decreasing=TRUE)
+plotData <- data.frame("Gene"=names(freqOfExp),"Frequency"=freqOfExp)
+topFreq <- ggplot(plotData[1:ntop,], aes(x=factor(Gene,levels=Gene),y=Frequency)) +
+    geom_bar(stat="identity") +
+    coord_flip() +
+    xlab("Gene") +
+    ggtitle("Most frequently expressed genes") +
+    theme_bw()
+
+# Cell Viability
+mMito <- m[fD$Mitochondrial,]
+idtop <- fD[fD$symbol %in% names(freqOfExp)[1:ntop],"id"]
+mTop <- m[idtop,]!=0
+pD$prcntTop <- colSums(mTop)/ntop
+pD$prcntMito <- colSums(mMito)/colSums(m)
+cellViability <- ggplot(pD, aes(x=prcntMito, y=GenesDetected, color=Condition, shape=Replicate))+
+    geom_point() +
+    xlab("Percentage of mitochondrial reads") +
+    ggtitle("Cell Viability") 
+cellViability
+rm(mMito)
+rm(mTop)
+
+genesDetected
+LibrarySize
+cellViability
+topGenes
+topFreq
+sumry <- group_by(pD, SampleID) %>%
+    summarize("Number of cells"=n(),
+	      "Total molecules"=median(UmiSums),
+	      "Genes Detected"=median(GenesDetected))
+kable(sumry,caption="Summary of QC parameters as median")
+```
+
+# Index Swapping
+```{r, eval=FALSE}
+barcodes <- as.character(pD$barcode)
+spt <- strsplit(barcodes, split = "-", fixed = T)
+pD$sample <- sapply(spt, function(x) x[2])
+pD$bcs <- sapply(spt, function(x) x[1])
+pD.add <- data.frame(bcs=names(table(pD$bcs)),
+		     bc.obs=(table(pD$bcs)))
+pD.add <- pD.add[,-2]
+pD <- dplyr::left_join(pD,pD.add)
+
+# P1
+index.p1 <- ggplot(pD, aes(x=SampleID, fill=as.factor(bc.obs.Freq))) +
+    geom_bar() +
+    #     ggtitle("Samples contain many shared barcodes") +
+    scale_fill_discrete(name="Times barcode observed") +
+    theme(legend.position="bottom",
+	  legend.direction="horizontal")
+
+compare <- function(barcodes, samples) {
+    out <- NULL
+    ids <- levels(samples)
+    combs <- combn(ids,m=2, simplify=FALSE)
+    for (i in seq_along(combs)) {
+	comb <- combs[[i]]
+	s1 <- comb[1]
+	s2 <- comb[2]
+	bc1 <- as.character(barcodes[samples==s1])
+	bc2 <- as.character(barcodes[samples==s2])
+	x <- length(intersect(bc1,bc2))
+	m <- length(bc1)
+	n <- 750000
+	k <- length(bc2)
+	p.val <- phyper(q=x-1,m=m,n=n,k=k,lower.tail=FALSE)
+	tmp <- data.frame(s1=s1,
+			  s2=s2,
+			  n1=m,
+			  n2=k,
+			  shared=x,
+			  p.val=p.val)
+	out <- rbind(out,tmp)
+    }
+    return(out)
+}
+
+# P2
+compDf <- compare(pD$bcs, as.factor(pD$SampleID))
+index.p2 <- ggplot(compDf, aes(x=shared, y=-log10(p.val))) +
+    geom_point() +
+    xlab("# shared Barcodes") +
+    ylab("-log10(P)") +
+    geom_hline(yintercept=2,lty="dashed",color="red") 
+
+index.p1
+index.p2
+```
+
+# QC Filtering 
+## Cell-wise
+The following filters were applied to remove low quality cells:
+    - Library size (3 mads from median)
+    - Number of Genes detected (3 mads from median)
+    - Mitochondrial reads (3 mads from median)
+    - In addition cells with shared barcodes were also removed (to prevent reads from index swapping to contaminate the dataset)
+
+```{r}
+lib.outlier <- isOutlier(pD$UmiSums,nmads=3,type="both",log=TRUE)
+gd.outlier <- isOutlier(pD$GenesDetected,nmads=3,type="both",log=TRUE)
+mt.outlier <- isOutlier(pD$prcntMito,nmads=3,type="higher")
+bc.shared <- pD$bc.obs.Freq>1
+
+pD$PassLibSize <- !lib.outlier
+pD$PassGenesDetected <- !gd.outlier
+pD$PassViability <- !mt.outlier
+# pD$PassIndexSwap <- !bc.shared
+pD$PassAll <- pD$PassLibSize & pD$PassGenesDetected & pD$PassViability 
+kable(table(pD$PassLibSize,pD$Condition))
+kable(table(pD$PassGenesDetected,pD$Condition))
+kable(table(pD$PassViability,pD$Condition))
+kable(table(pD$PassAll,pD$Condition))
+```
+
+Overall a relatively high number of cells is flagged as "poor-quality", this is mainly due to a stringent filter on cell viability with `r sum(mt.outlier)` cells being flagged as non-viable.
+The thresholds are as follows : `r max(pD$UmiSums[!lib.outlier])` for UmiSums,`r max(pD$GenesDetected[!gd.outlier])` for genes detected and `r max(pD$prcntMito[!mt.outlier])` for viability.
+Yet, there does not seem to be a certain sample/Condition that has a substantially high number of low quality cells.
+
+```{r}
+kable(t(table(pD$PassAll,pD$SampleID))/colSums(table(pD$PassAll,pD$SampleID)))
+kable(t(table(pD$PassAll,pD$Condition))/colSums(table(pD$PassAll,pD$Condition)))
+```
+
+## Gene-wise
+Genes with a mean log expression lower that 0.01 are removed from the dataset, apart form Cre and tdTomato
+```{r}
+fD$keep <- rowMeans(m)>0.01 
+```
+
+## Final data & Save
+```{r}
+dim(m[fD$keep,pD$PassAll])
+pD.pass <- pD[pD$PassAll,]
+genesDetected %+% pD.pass
+LibrarySize %+% pD.pass
+cellViability %+% pD.pass
+out <- list()
+out[["counts"]] <- m
+out[["phenoData"]] <- pD
+out[["featureData"]] <- fD
+saveRDS(out,file="../data/Robjects/ExpressionList_QC.rds")
+```
