@@ -28,4 +28,4 @@ pD$sf <- computeSumFactors(m, sizes=seq(20,min(100,minSize),5),clusters=clusters
 plot(log10(colSums(m))~log10(pD$sf),main="Library Size versus Size Factors")
 
 out <- pD[,c("barcode","sf")]
-write.csv(file="../data/Robjects/SizeFactors.csv",out,row.names=FALSE)
+write.table(file="../data/Robjects/SizeFactors.csv", out, row.names=FALSE, sep=",")
