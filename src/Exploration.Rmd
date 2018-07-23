@@ -9,13 +9,15 @@ output:
     toc_float: true
     theme: united
     highlight: tango
+    code_folding: hide
 ---
 ***
 
-# Load Data
-```{r, message=FALSE}
+# Quality and Sanity checks
+```{r, message=FALSE,warning=FALSE}
 library(scran)
 library(scater)
+library(plyr)
 library(dplyr)
 library(knitr)
 library(ggplot2)
@@ -35,13 +37,32 @@ fD <- dataList[["featureData"]]
 rm(dataList)
 ```
 
-# Number of Cells
-We sequenced a total of `r ncol(m)` cells.
-```{r}
-kable(t(as.matrix(table(pD$Condition))))
+## Overview over samples
+We prepared a total of 14 scRNA-seq libraries from two 10x Chips (7 per chip), resulting in a total of `r ncol(m)` cells.
+CBLT represents the wildtype control animal.
+WKBR61.4dT is the tumor and WKBR61.4dM is the remaining glands pooled from the same animal.
+
+***
+__I mostly use the age covariate to split the different conditions, note that the 53 weeks old animal is WT!__
+
+```{r, message=FALSE}
+sumry <- group_by(pD, Condition) %>%
+    summarize("# Before QC"=n(),
+	      "Total molecules"=median(UmiSums),
+	      "Genes Detected"=median(GenesDetected),
+	      "Age"=unique(Age))
+sumryAQC <- filter(pD, PassAll) %>%
+    group_by(Condition) %>%
+    summarize("# After QC"=n())
+sumry <- full_join(sumry,sumryAQC)
+sumry <- sumry[,c(1,5,2,6,4,3)]
+kable(sumry)
 ```
 
-# Most of the variation in cell number is between biological replicates
+## Most of the variation in cell number is between biological replicates
+The samples from each animal were split into two technical replicates that were loaded onto two different chips.
+We can thus compare whether the variation in number of cells is greater between biological or technical replicates.
+It appears that the number of cells varies mainly between biological replicates, indicating that the cell quantification before loading mostly determines the number of cells sequenced rather than differences in capture efficiency.
 ```{r}
 fp <- group_by(pD[!pD$AnimalHadTumor,], SampleID) %>%
     summarize(Number=n())
@@ -50,7 +71,48 @@ ggplot(fp, aes(x=Condition, y=Number)) +
     geom_point()
 ```
 
-# Quality Control
+## Comparison to FACS Analysis
+A fraction of cells was taken from the sample that was submitted to sequencing was analysed using flow cytometry.
+I compared the fraction of EpCam+ cells between FACS and scRNA-seq data to see if there's any bias in capturing efficiency between epithelial vs. non-epithelial.
+### No bias for epithelial cells
+```{r, message=FALSE, warning=FALSE}
+facs <- read.csv("../data/misc/FACS_data.csv")
+colnames(facs)[1] <- "Condition"
+anno_full <- read.csv("../data/Robjects/Cluster_all.csv")
+pD.sub <- left_join(anno_full,pD)
+summ <- group_by(pD.sub, Condition) %>% 
+    summarize(scRNA_Epithelial=(sum((Class=="Epithelial"))/n())*100,
+	      scRNA_Basal=(sum((Cluster=="C14"))/sum(Class=="Epithelial"))*100,
+	      scRNA_Luminal=(sum((Cluster %in% c("C20","C12")))/sum(Class=="Epithelial"))*100)
+	      
+summ <- left_join(summ,facs)
+ggplot(summ, aes(x=scRNA_Epithelial, y=Epithelial, color=Condition)) +
+    geom_point() +
+    geom_smooth(method="lm",aes(color=NULL)) +
+    geom_abline(intercept=0,slope=1,lty="dashed",color="grey50") +
+    xlab("% Epithelial from scRNA-seq Data") +
+    ylab("% Epithelial from FACS")
+```
+
+### Bias for capturing luminal cells vs basal cells
+According to the FACS data the fraction of luminal cells is much smaller than it is the scRNA-seq data. Either the definition of "luminal" or "basal" from the FACS and scRNA-seq don't fully overlap or basal cells are less likely to be captured.
+**I need to go back and double check the FACS data.**
+```{r, message=FALSE, warning=FALSE}
+summ <- summ[!grepl("61.4",summ$Condition),]
+ggplot(summ, aes(x=scRNA_Luminal, y=luminal, color=Condition)) +
+    geom_point() +
+    geom_smooth(method="lm",aes(color=NULL)) +
+    geom_abline(intercept=0,slope=1,lty="dashed",color="grey50") +
+    xlab("% Luminal from scRNA-seq Data") +
+    ylab("% Luminal from FACS") +
+    xlim(0,100) +
+    ylim(0,100)
+```
+
+
+## Quality of sequencing data
+Overall the quality looks good, we do have less genes detected and less UMI counts per cell on average.
+My feeling is that this is because we get less molecules from non-epithelial cells, whether this is because of less mRNA or different lysis efficiency I don't know.
 ```{r, fig.width=12, fig.height=12}
 filt.gd1 <- min(pD$GenesDetected[pD$PassAll])
 filt.gd2 <- max(pD$GenesDetected[pD$PassAll])
@@ -93,20 +155,6 @@ cellViability <- ggplot(pD, aes(x=SampleID,y=prcntMito,fill=Condition)) +
     theme_bw() +
     coord_flip()
 
-sumry <- group_by(pD, SampleID) %>%
-    summarize("# Before QC"=n(),
-	      "Total molecules"=median(UmiSums),
-	      "Genes Detected"=median(GenesDetected))
-sumryAQC <- filter(pD, PassAll) %>%
-    group_by(SampleID) %>%
-    summarize("# After QC"=n())
-sumry <- full_join(sumry,sumryAQC)
-sumry <- sumry[,c(1,2,5,3,4)]
-sumry <- group_by(pD, SampleID) %>%
-    summarize("Number of cells"=n(),
-	      "Total molecules"=median(UmiSums),
-	      "Genes Detected"=median(GenesDetected))
-
 
 mytheme <- gridExtra::ttheme_default(
     core = list(fg_params=list(cex = 0.8)),
@@ -119,7 +167,6 @@ p3 <- plot_grid(p2,p1,nrow=2)
 print(p3)
 ```
 
-## Actually applying the filter
 ```{r}
 cells <- pD$barcode[pD$PassAll==TRUE]
 m <- m[,cells]
@@ -128,7 +175,7 @@ genes <- rowMeans(m)>0.01
 m <- m[genes,]
 ```
 
-# Batch effect is negligble
+## Batch effect is minor
 In order to assess the batch effect between the two 10x chips, we can look at the technical replicates that were spread across the two chips.
 Each tSNE represents cells from one animal, and is colored by the two replicates, that were loaded on two separate chips.
 ```{r, fig.width=10, fig.height=13, warning=FALSE, message=FALSE}
@@ -147,7 +194,11 @@ for (cond in conds) {
 plot_grid(plotlist=pltlist,ncol=2)
 ```
 
-# tSNE by age of the animals
+# Overall Structure
+## tSNE by the age of the animal
+The data appears to be quite consistent for most of the ages.
+Only WKBR65.3i (38 weeks) differs slightly from the other 38 week old animals.
+
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
 # conds <- unique(pD$Age[pD$AnimalHadTumor==FALSE])
 conds <- list("38","41","46","53")
@@ -186,5 +237,198 @@ for (cond in conds) {
 	#         facet_wrap(~Age)
 }
 
-plot_grid(plotlist=pltlist,ncol=1)
+plot_grid(plotlist=pltlist,ncol=2)
+```
+
+# Cell type Inference without tumor
+At first, I clustered the data without the tumor in order to avoid any masking of cell type structure by a potentially strong tumor vs. normal signal.
+By and large the clustering appears to represent cell types, which we can generally easily infer based on a few marker genes. 
+Some Clusters will need a bit more work in order to be fully identified, but for now the following annotation should do.
+
+
+## 17 Clusters representing various cell types
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+tsn <- read.csv("../data/Robjects/tSNE_nontumor_raw.csv")
+pD.sub <- right_join(pD,tsn)
+anno <- read.csv("../data/Robjects/CellTypes.csv")
+pD.sub <- right_join(pD.sub,anno)
+
+p0 <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Cluster)) +
+    geom_point() +
+    theme_void() +
+    ggtitle("Cluster")
+
+celltypes <- data.frame("Cluster"=c("C16","C8","C14",
+				    "C13","C2.C3","C11",
+				    "C12","C10",
+				    "C18","C1","C17",
+				    "C5","C6","C7",
+				    "C9","C15","C4"),
+			"Identity"=c("Basal","Hs-Luminal","Unknown",
+				      "Unknown-Immune","T-Cell","Myeloid",
+				      "T-Cell","Lp-Luminal",
+				      "Endothelial/Adipocyte/Macrophage",
+				      "B-cell?","potDoublet","Fibroblast",
+				      "CTL/NK","Fibroblast","Fibroblast",
+				      "Fibroblast","T-cell"),
+			"Marker"=c("Krt5","Prlr","?","Cd74","Cd3d","Lyz2","Cd3d",
+				   "Krt18","Fabp4,Il6","Jchain","?","Mfap5","Gzma","Gsn","Col1a2","Col1a2","Icos"))
+
+celltypes$Class <- mapvalues(celltypes$Cluster,as.character(anno$Cluster),
+			     as.character(anno$Class))
+kable(celltypes)
+
+p1 <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Class)) +
+    geom_point() +
+    theme_void() +
+    ggtitle("Lineages")
+p0
+```
+
+## Clusters can be grouped into a handful of lineages
+The 17 clusters can be roughly grouped into a handful of different lineages.
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+p1
+```
+
+## Cluster composition over time
+C10 (Luminal progenitor) appears to expand over time.
+Note, that we only have one animal for 53 weeks (WT) and 46 weeks.
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+subsmp <- group_by(pD.sub, Age) %>% sample_n(5000)
+subsmp$Age <- factor(subsmp$Age, levels=c("53","38","41","46"))
+ggplot(subsmp, aes(x=Age, fill=Cluster)) +
+    geom_bar()
+```
+
+## Substructure per cell compartment
+As this dataset contains a huge variety of cell types, subtle differences between different e.g. epithelial cells might be masked. 
+In the following I simply computed the tSNE separately for the three main lineages.
+We can see further structure emerging especially so in the epithelial compartment, which can be further analysed using a second round of clustering (not done yet).
+In addition, I plotted the tSNEs per age in order to see whether there are changes in composition across time.
+The two main effects I found are changes in the ER- compartment in the BRCA1 animals compared to WT.
+Changes over time are less obvious, which is also complicated by the fact that we only have one 46 weeks old sample.
+The only potential hint could be a shift of ER- cells towards the basal compartment in 41 weeks as compared to 38 weeks. 
+Not sure how valid it is to derive this conclusion from the tSNE but it also supported by expression of basal markers of ER- cells that are close to the basal cells in the tSNE.
+Might be something worth investigating in more depth.
+Otherwise, the BRCA1 animals appear to have a cluster of T-cells that is (almost) not present in the wild type animals.
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+substructure <- read.csv("../data/Robjects/Substructure.csv")
+substructure <- substructure[,c("barcode","Cluster","Class","tSNE2","tSNE1")]
+pD.sub <- right_join(pD,substructure)
+
+epi <- pD.sub[pD.sub$Class=="Epithelial",]
+fbs <- pD.sub[pD.sub$Class=="Fibroblast",]
+im <- pD.sub[pD.sub$Class=="Immune",]
+p0 <- ggplot(epi, aes(x=tSNE1, y=tSNE2)) +
+    geom_point(aes(color=Cluster)) +
+    geom_density_2d(size=1.0,color="grey10") +
+    facet_wrap(~Age) +
+    ggtitle("Epithelium")
+
+p1 <- ggplot(fbs, aes(x=tSNE1, y=tSNE2)) +
+    geom_point(aes(color=Cluster)) +
+    geom_density_2d(size=1.0,color="grey10") +
+    facet_wrap(~Age) +
+    ggtitle("Fibroblasts")
+
+p2 <- ggplot(im, aes(x=tSNE1, y=tSNE2)) +
+    geom_point(aes(color=Cluster)) +
+    geom_density_2d(size=1.0,color="grey10") +
+    facet_wrap(~Age) +
+    ggtitle("ImmuneCells")
+
+p0
+p1
+p2
+```
+
+## Diffusion Map of Epithelium
+In order to further look at potential transitions between the various epithelial clusters I computed diffusion map of the epithelium form all samples excluding the tumor.
+Cells were downsampled to the number of cells from the age with the fewest cells.
+```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
+dms <- read.csv("../data/Robjects/DiffusionMap.csv")
+epi <- right_join(epi,dms)
+epi$Cluster <- as.character(epi$Cluster)
+epi$Cluster <- mapvalues(epi$Cluster,c("C10","C16","C8"),
+			 c("Lp","Basal","Hs"))
+epi <- group_by(epi, Age) %>%
+    sample_n(2251)
+ggplot(epi, aes(x=DC1, y=DC2, color=Cluster)) +
+    geom_point() +
+    facet_wrap(~Age) +
+    ggtitle("Basal-Luminal Transitions")
+
+ggplot(epi, aes(x=DC2, y=DC3, color=Cluster)) +
+    geom_point() +
+    facet_wrap(~Age) +
+    ggtitle("Alveologenesis")
+```
+
+# Analysis with tumor sample
+Next, I decided to try if we can recapitulate the cell type structure if we include the tumor sample in the clustering step as this might facilitate downstream analyses.
+It appears that most clusters are maintained almost 1:1. 
+The only exceptions are the following.
+The myeloid cluster C11 is now split in three clusters, one of which contains a lot of tumor cells.
+This might be sensible as this clustered appeared to contain additional structure anyway.
+Cells from the fibroblast clusters C15 and C9 are now distributed slightly different between the two.
+The potential doublet cluster C17 is now a bit rearranged.
+The two T-Cell clusters C2.C3 and C4 are merged into C1.C15.
+In general, it doesn't seem like including the tumor sample does a lot of harm, and we seem to still be able to tease out the different cell types.
+It might be worth trying to a second round of clustering per celltype to resolve further structure.
+
+## Comparison of Clustering
+Rows are the new clusters, columns the old.
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
+pD.sub <- left_join(pD,anno)
+anno_full <- read.csv("../data/Robjects/Cluster_all.csv")[,-1]
+colnames(anno_full)[2] <- "Cluster_Full"
+colnames(anno_full)[3] <- "Class_Full"
+pD.sub <- left_join(pD.sub,anno_full)
+kable(table(pD.sub$Cluster_Full,pD.sub$Cluster,useNA="always"))
+```
+This is also reflected in the fact that the lineage assignment remains laargely the same
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+kable(table(pD.sub$Class,pD.sub$Class_Full,useNA="always"))
+```
+
+## tSNEs
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+# pD.sub <- pD.sub[,-c(18,19)]
+tsn <- read.csv("../data/Robjects/tSNE_38-41-46-53_raw.csv")
+pD.sub <- left_join(pD.sub,tsn)
+ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Cluster_Full)) +
+    geom_point() +
+    ggtitle("Cluster") 
+# facet_wrap(~Cluster_Full)
+
+ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Class_Full)) +
+    geom_point() +
+    ggtitle("Lineages")
+```
+
+## Diffusion Map of Epithelium including tumor
+I then computed the DM of all EpCam+ clusters including the tumor sample.
+We can see what we saw earlier already, Lp-Luminal, Hs-Luminal and Basal, with potential transitions between Lp-Luminal and the other two.
+In addition we can also see a few transitions between Lp-Luminal and the tumor. 
+It is interesting that these are between Lp-Luminal and the tumor and not to any other compartment. 
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+dms <- read.csv("../data/Robjects/DiffusionMap_Epithelium.csv")
+pD.sub <- right_join(pD,dms)
+pD.sub <- left_join(pD.sub, anno_full)
+pD.sub$Cluster_Full <- as.character(pD.sub$Cluster_Full)
+pD.sub$Cluster_Full <- mapvalues(pD.sub$Cluster_Full,
+				 c("C12","C14","C20","C4"),
+				 c("Hs","Basal","Lp","Tumor"))
+ggplot(pD.sub, aes(x=DC1, y=DC2, color=Cluster_Full)) +
+    geom_point() 
+
+ggplot(pD.sub, aes(x=DC1, y=DC3, color=Cluster_Full)) +
+    geom_point() 
+library(scatterplot3d)
+cols <- mapvalues(pD.sub$Cluster_Full,
+		  c("Hs","Basal","Lp","Tumor"),
+		  c("green","red","turquoise","violet"))
+scatterplot3d(pD.sub[,c("DC1","DC2","DC3")],pch=19, angle=140,color=cols,cex.symbols=0.5,box=FALSE)
 ```
