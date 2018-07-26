@@ -408,6 +408,20 @@ ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Class_Full)) +
     ggtitle("Lineages")
 ```
 
+## UMAP
+```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
+umap <- read.csv("../data/Robjects/UMAP_all.csv")
+pD.sub <- left_join(pD.sub,umap)
+ggplot(pD.sub, aes(x=UMAP1, y=UMAP2, color=Cluster_Full)) +
+    geom_point() +
+    ggtitle("Cluster") 
+# facet_wrap(~Cluster_Full)
+
+ggplot(pD.sub, aes(x=UMAP1, y=UMAP2, color=Class_Full)) +
+    geom_point() +
+    ggtitle("Lineages")
+```
+
 ## Diffusion Map of Epithelium including tumor
 I then computed the DM of all EpCam+ clusters including the tumor sample.
 We can see what we saw earlier already, Lp-Luminal, Hs-Luminal and Basal, with potential transitions between Lp-Luminal and the other two.
@@ -420,7 +434,7 @@ pD.sub <- left_join(pD.sub, anno_full)
 pD.sub$Cluster_Full <- as.character(pD.sub$Cluster_Full)
 pD.sub$Cluster_Full <- mapvalues(pD.sub$Cluster_Full,
 				 c("C12","C14","C20","C4"),
-				 c("Hs","Basal","Lp","Tumor"))
+				 c("Basal","Hs","Lp","Tumor"))
 ggplot(pD.sub, aes(x=DC1, y=DC2, color=Cluster_Full)) +
     geom_point() 
 
