@@ -143,6 +143,9 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 	for (cl in names(marker.list)) {
 	    sb <- marker.list[[cl]]
 	    sb <- as.matrix(sb[,grepl("logFC",colnames(sb))])
+	    if(ncol(sb)==1) {
+		colnames(sb) <- paste0("logFC.",clust.vals[clust.vals!=cl])
+	    }
 	    sb <- colSums(abs(sb)>=1)
 	    names(sb) <- substr(names(sb),7,nchar(names(sb)))
 	    sb[cl] <- 0
