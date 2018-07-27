@@ -163,6 +163,9 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 	    newgrps <- sapply(c(1:max(cs)), function(i) paste(names(cs)[cs==i],collapse="."))
 	    csnew <- mapvalues(cs,c(1:max(cs)), newgrps)
 	    clusters <- mapvalues(clusters,names(csnew),csnew)
+	    if(length(unique(clusters))==1) {
+		break
+	    }
 	} else {
 	    break
 	}
