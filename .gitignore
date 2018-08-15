@@ -1,0 +1,5 @@
+/data
+/history
+*.html
+*_cache/
+*_files/
