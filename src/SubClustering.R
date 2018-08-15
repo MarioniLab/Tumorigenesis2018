@@ -117,5 +117,5 @@ res$SubClusterLabels <- as.character(res$SubClusterLabels)
 res$SubClusterLabels[is.na(res$SubClusterLabels)] <- "C8"
 res$ClusterLabels <- gsub("A$|B$|C$|D$|E$|F$|G$|H$","",res$SubClusterLabels)
 
-res <- res[,c("barcode","ClusterLabels","SubClusterLabels","Sub.tSNE1","Sub.tSNE2")]
+res <- res[,c("barcode","ClusterLabels","SubClusterLabels","Sub.tSNE1","Sub.tSNE2","Class")]
 write.csv(res,"../data/Robjects/Cluster_final.csv")
