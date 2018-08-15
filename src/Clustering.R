@@ -23,13 +23,11 @@ rm(dataList)
 sfs <- read.csv("../data/Robjects/SizeFactors.csv")
 
 rownames(m.full) <- as.vector(rownames(m.full))
-# cond <- c("38","41","53")
 
-cells <- pD.full$Condition!="WKBR61.4dT"
 # Gene and cell filtering
-m <- m.full[,pD.full$PassAll & cells]
+m <- m.full[,pD.full$PassAll]
 keep <- rowMeans(m)>0.01
-pD <- pD.full[pD.full$PassAll & cells,]
+pD <- pD.full[pD.full$PassAll,]
 m <- m[keep,]
 fD <- fD.full[keep,]
 
@@ -44,7 +42,7 @@ hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
 
 # clustering
 set.seed(300)
-igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE)
+igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE,k=10)
 cs <- cluster_louvain(igr)
 cs <- cs$membership
 clusts <- as.factor(paste0("C",unname(cs)))
@@ -53,44 +51,48 @@ clusts <- as.factor(paste0("C",unname(cs)))
 merged <- mergeCluster(m, clusts, maxRep=40, min.DE=15, removeGenes=fD$id[!fD$KeepForHvg])
 pD$Cluster <- merged$NewCluster
 
-# Test Graph abstraction
-x <- clusterModularity(igr,pD$Cluster,get.values=TRUE)
-obexp <- x$observed/x$expected
-obexp[obexp <= 10^-1] <- 0
-grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
-plot(grph,edge.width=E(grph)$weight*20, vertex.size=as.vector(table(pD$Cluster))/300)
+# Test Graph abstraction (crashes)
+# x <- clusterModularity(igr,pD$Cluster,get.values=TRUE)
+# obexp <- x$observed/x$expected
+# obexp[obexp <= 10^-1] <- 0
+# grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
+# plot(grph,edge.width=E(grph)$weight*20, vertex.size=as.vector(table(pD$Cluster))/300)
 
 # Compute tSNE 
-tsn <- read.csv("../data/Robjects/tSNE_nontumor_raw.csv")
+tsn <- read.csv("../data/Robjects/tSNE_38-41-46-53_raw.csv")
 pD <- left_join(pD,tsn)
 
 
 p1 <- ggplot(pD, aes(x=tSNE1, y=tSNE2, color=Cluster)) +
     geom_point() +
-    theme_void() +
-    facet_wrap(~Cluster)
-p1
+    theme_void() 
+# p0
 
 anno <- pD[,c("barcode","Cluster")]
 anno$Class <- mapvalues(anno$Cluster,
-			c("C1","C2.C3","C4","C5","C6","C7","C8","C9","C10",
-			  "C11","C12","C13","C14","C15","C16","C17","C18"),
-			c("Lymphoid","Lymphoid","Lymphoid","Fibroblast","Lymphoid","Fibroblast","Epithelial","Fibroblast","Epithelial",
-			  "Myeloid","Lymphoid","Lymphoid","Myeloid","Fibroblast","Epithelial","Doublet","Endothelial"))
+			c("C1.C15","C2","C3","C4","C5","C6","C7","C8","C9","C10",
+			  "C11","C12","C13","C14","C16","C17","C18","C19","C20",
+			  "C21"),
+			c("Lymphoid","Myeloid","Myeloid","Epithelial","Myeloid","Fibroblast","Lymphoid","Fibroblast","Fibroblast","Lymphoid",
+			  "potDoublet","Epithelial","Fibroblast","Epithelial","Lymphoid","Myeloid","Lymphoid","Endothelial","Epithelial",
+			  "Myeloid"))
 
-
-write.csv(file="../data/Robjects/CellTypes.csv",anno)
-
+write.csv(file="../data/Robjects/Cluster_all.csv",anno)
+# pD$Class <- anno$Class
 # rownames(pD) <- pD$barcode
 # rownames(fD) <- fD$symbol
 # rownames(m) <- fD$symbol
+# 
 # marker <- findMarkers(m,pD$Cluster)
 # sapply(names(marker),function(x) write.csv(marker[[x]],file=paste0("tmp/",x,".csv")))
-
+# set.seed(300)
+# smp <- sample(pD$barcode,20000)
+# m.sub <- m[,smp]
+# pD.sub <- pD[smp,]
 # sce <- SingleCellExperiment(rowData=fD,
-#                             colData=pD,
-#                             assays=list(logcounts=m),
-#                             reducedDims=SimpleList(tSNE=as.matrix(pD[,c("tSNE1","tSNE2")])))
+#                             colData=pD.sub,
+#                             assays=list(logcounts=m.sub),
+#                             reducedDims=SimpleList(tSNE=as.matrix(pD.sub[,c("tSNE1","tSNE2")])))
 # 
 # library(iSEE)
 # 
