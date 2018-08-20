@@ -41,6 +41,9 @@ anno <- read.csv("../data/Robjects/Cluster_final.csv")[,-1]
 pD <- right_join(pD,tsn)
 pD <- left_join(pD,anno)
 
+#subsmp for frequency comparsions
+subsmp <- group_by(pD, Condition) %>% sample_n(5000)
+
 m <- m[,pD$barcode]
 keepgenes <- fD$id[fD$KeepForHvg]
 fD <- fD[rowMeans(m)>0.01 & fD$id %in% keepgenes,]
@@ -55,7 +58,7 @@ After having compared cell type inference with or without tumor, we have decided
 
 ## tSNEs
 ```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=Condition)) +
+ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels)) +
     geom_point() +
     ggtitle("Cluster") 
 
@@ -174,7 +177,8 @@ __Frequency of clusters__
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 totCells <- as.vector(table(pD$Condition))
 freqOfClust <- t(t(table(factor(pD.sub$ClusterLabels),pD.sub$Condition))/totCells)
-kable(freqOfClust)
+freqOfClust <- freqOfClust * 100
+kable(freqOfClust,digits=1)
 
 ## PCA per sample on immune cells
 out <- data.frame(numeric(nrow(m.sub)))
@@ -239,7 +243,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Birc5",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 print(overviewPlot(m.sub,pD.sub,clust,"Tnfrsf4",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
       variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Cd164",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
-	 fontsize=7)
+      variable="SubClusterLabels"))
 
 print(overviewPlot(m,pD,clust,"Cd28"))
 print(overviewPlot(m,pD,clust,rownames(markedby)[1]))
@@ -628,7 +632,8 @@ __Frequency of clusters__
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 totCells <- as.vector(table(pD$Condition))
 freqOfClust <- t(t(table(factor(pD.sub$ClusterLabels),pD.sub$Condition))/totCells)
-kable(freqOfClust)
+freqOfClust <- freqOfClust * 100
+kable(freqOfClust, digits=1)
 
 subsmp.sub <- subsmp[subsmp$ClusterLabels %in% clust,]
 ggplot(subsmp.sub, aes(x=factor(ClusterLabels), fill=Condition)) +
@@ -854,7 +859,8 @@ __Frequency of clusters__
 ```{r, fig.width=5, fig.height=7, warning=FALSE, message=FALSE}
 totCells <- as.vector(table(pD$Condition))
 freqOfClust <- t(t(table(factor(pD.sub$ClusterLabels),pD.sub$Condition))/totCells)
-kable(freqOfClust)
+freqOfClust <- freqOfClust * 100
+kable(freqOfClust, digits=1)
 ```
 ## C5 is a fibroblast cluster
 - This cluster is mainly tumor derived. I asssume it is a tumor educated type of fibroblast (CAFs).
@@ -978,6 +984,143 @@ colnames(mheat) <- gsub("logFC.","",colnames(mheat))
 pheatmap(mheat,
 	 cluster_rows=FALSE,
 	 cluster_cols=FALSE,
+	 show_colnames=TRUE,
+	 fontsize=7)
+
+print(overviewPlot(m,pD,clust,"Mfap5"))
+```
+
+## C9 is a fibroblast cluster
+- Appears to be closely related to C6 and C13.
+- Almost not present in the tumor otherwise all samples show it.
+```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+clust <- "C9"
+ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+    geom_point() 
+markedby <- markers[[clust]]
+markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
+mheat <- as.matrix(markedby[,c(3:ncol(markedby))])[1:50,]
+colnames(mheat) <- gsub("logFC.","",colnames(mheat))
+pheatmap(mheat,
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_colnames=TRUE,
+	 fontsize=7)
+print(overviewPlot(m,pD,clust,"Gsn"))
+print(overviewPlot(m,pD,clust,"Cxcl1"))
+print(overviewPlot(m,pD,clust,"Gpc3"))
+```
+
+### Substructure
+- __Cluster A__ shows higher expression of certain cytokines (Ccl11, Ccl2, Cxcl1, Ccl7)
+- __Cluster B__ might be in a cell state related to TNF-a signaling
+- __Cluster C__ nothing cleary distinctive
+- __Cluster D__ shows Has1 expression, but apart from that not much that is clearly distinctive
+```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+pD.sub <- pD[pD$ClusterLabels==clust,]
+m.sub <- m[,pD.sub$barcode]
+table(factor(pD.sub$SubClusterLabels),factor(pD.sub$Condition))
+ggplot(pD.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubClusterLabels)) +
+    geom_point() 
+
+submarkers <- findMarkers(m.sub,
+			  factor(pD.sub$SubClusterLabels))
+x <- data.frame(submarkers[[4]])
+x <- x[apply(x,1,min)>0,]
+
+subsmp.sub <- subsmp[subsmp$ClusterLabels==clust,]
+ggplot(subsmp.sub, aes(x=factor(SubClusterLabels), fill=Condition)) +
+    geom_bar()
+
+print(overviewPlot(m.sub,pD.sub,clust,"Gpc3",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Zfp36",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Mmp3",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Has1",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+```
+
+
+
+
+## C13 is a fibroblast cluster
+- Present in all samples, depleted in the tumor.
+```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+clust <- "C13"
+ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+    geom_point() 
+markedby <- markers[[clust]]
+markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
+mheat <- as.matrix(markedby[,c(3:ncol(markedby))])[1:50,]
+colnames(mheat) <- gsub("logFC.","",colnames(mheat))
+pheatmap(mheat,
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_colnames=TRUE,
+	 fontsize=7)
+print(overviewPlot(m,pD,clust,"Mmp3"))
+print(overviewPlot(m,pD,clust,"Lum"))
+print(overviewPlot(m,pD,clust,"Dcn"))
+```
+
+### Substructure
+- Most of the structure seems to come from continuous changes in gene expression.
+- Again some Fos/Jun signaling substructure..
+```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+pD.sub <- pD[pD$ClusterLabels==clust,]
+m.sub <- m[,pD.sub$barcode]
+table(factor(pD.sub$SubClusterLabels),factor(pD.sub$Condition))
+ggplot(pD.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubClusterLabels)) +
+    geom_point() 
+
+submarkers <- findMarkers(m.sub,
+			  factor(pD.sub$SubClusterLabels))
+x <- data.frame(submarkers[[4]])
+x <- x[apply(x,1,min)>0,]
+
+subsmp.sub <- subsmp[subsmp$ClusterLabels==clust,]
+ggplot(subsmp.sub, aes(x=factor(SubClusterLabels), fill=Condition)) +
+    geom_bar()
+
+print(overviewPlot(m.sub,pD.sub,clust,"Tnfaip6",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Pcolce",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
+  variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Mfap4",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Ier2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+```
+
+
+## C18 is an endothelial cell cluster
+- Best marked by Fabp4, which is mainly expressed in Adipocytes and Macrophages but can also be present in endothelial cells.
+- It appears to be an endothelial cluster due to the expression of various endothelial genes, such as Esam and Eng.
+```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+clust <- "C18"
+ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+    geom_point() 
+markedby <- markers[[clust]]
+markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
+mheat <- as.matrix(markedby[,c(3:ncol(markedby))])[1:80,]
+colnames(mheat) <- gsub("logFC.","",colnames(mheat))
+pheatmap(mheat,
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_colnames=TRUE,
+	 fontsize=7)
+print(overviewPlot(m,pD,clust,"Fabp4"))
+print(overviewPlot(m,pD,clust,"Esam"))
+print(overviewPlot(m,pD,clust,"Eng"))
+```
+
+### Substructure
+
+- This cluster has remarkable structure to it.
+- Cluster B and Cluster D are negative for Esam, Eng and Emcn. All markers for endothelial cells.
+- __Cluster A__ expresses cannonical markers of endothelial cells
+- __Cluster B__ is marked by genes related to Myelin (Mbp, Mpz)
+- __Cluster C__ is marked by Fbln5 and also expresses markers of endothelial cells
 - __Cluster D__ expresses Prox1 (marker of lymphatic endoth.) and Nts (Neurotensin), apparently also expressed in lymphatic endoth.
 - __Cluster E__ is marked by Kcnj8
 - __Cluster F__ is marked by Acta2, Myl9 and migh represent more myoendothelial like cells
@@ -993,6 +1136,11 @@ submarkers <- findMarkers(m.sub,
 			  factor(pD.sub$SubClusterLabels))
 x <- data.frame(submarkers[[7]])
 x <- x[apply(x,1,min)>0,]
+
+subsmp.sub <- subsmp[subsmp$ClusterLabels==clust,]
+ggplot(subsmp.sub, aes(x=factor(SubClusterLabels), fill=Condition)) +
+    geom_bar()
+
 print(overviewPlot(m.sub,pD.sub,clust,"Emcn",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Mpz",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Fbln5",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
@@ -1002,6 +1150,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Kcnj8",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 print(overviewPlot(m.sub,pD.sub,clust,"Acta2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Selp",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 ```
+
 
 
 # C11 is unknown might be doublet
