@@ -138,6 +138,7 @@ overviewPlot <- function(m,pD,cluster,gene,
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, cache=TRUE}
 markers <- findMarkers(m,pD$ClusterLabels)
+sapply(names(markers),function(x) write.csv(markers[[x]],file=paste0("../data/misc/marker/",x,".csv")))
 ```
 
 # Immune Cells
@@ -290,6 +291,9 @@ print(overviewPlot(m.sub,pD.sub,clust,"Ccr7",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 ## C2 is a monocyte cluster
 - Cd14 positive
 - Expresses high levels of the alarmin s100a8/a9, which is a biomarker for local inflammation (https://www.nature.com/articles/ncomms5593.pdf). It is highly enriched in the tumor.
+- other markers include: Slfn4 (a gene that supposably marks MDSCs (https://www.jci.org/articles/view/82529/pdf) in gastric metaplasia)
+- Slfn4 is particularly interesting as it's expression in this cluster is restricted to animals that have or almost have tumors
+- These are neutrophils according to (http://cancerimmunolres.aacrjournals.org/content/canimm/early/2014/05/06/2326-6066.CIR-13-0209.full.pdf)
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C2"
 ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
@@ -488,6 +492,7 @@ print(overviewPlot(m,pD,clust,"Ebf1"))
 
 ## C16 is a monocyte cluster
 - Marked by Retnla (marker of alternatively activated macrophages (AAM))
+- Expresses Cd209a and Cd209f, markers of DCs (or Macrophages..) (has been used to determine DCs in other scRNA-seq papers
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C16"
 ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
