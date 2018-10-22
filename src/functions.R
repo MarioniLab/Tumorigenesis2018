@@ -234,3 +234,45 @@ subCluster <- function(m, clusters, removeGenes=NULL, method="dynamic", ...) {
     out <- out[colnames(m)]
     return(as.factor(out))
 }
+bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE) { 
+    out <- data.frame(numeric(length(markers)))
+    colnames(out) <- levels(factor(grps))[1]
+    out.freq <- out
+    for (cond in levels(factor(grps))) {
+	expr <- rowMeans(m[markers,grps==cond])
+	expr.freq <- rowMeans(m[markers,grps==cond]>0)
+	colname <- cond
+	out[,colname] <- expr
+	out.freq[,colname] <- expr.freq
+    }
+    out <- as.matrix(out)
+    out.freq <- as.matrix(out.freq)
+    rownames(out.freq) <- rownames(out) <- markers
+    out <- t(scale(t(out))) 
+    out.long <- melt(out,value.name="Mean")
+    out.freq <- melt(out.freq,value.name="Frequency")
+    out.long$Frequency <- out.freq$Frequency * 100
+
+    if (cluster_row) {
+    dis <- dist(out)
+    hclst <- hclust(dis,method="ward.D2")
+    lvlsVar1 <- rownames(out)[hclst$order]
+    out.long$Var1 <- factor(out.long$Var1, levels=lvlsVar1)
+    }
+    if (cluster_col) {
+    dis <- dist(t(out))
+    hclst <- hclust(dis,method="ward.D2")
+    lvlsVar2 <- colnames(out)[hclst$order]
+    out.long$Var2 <- factor(out.long$Var2, levels=lvlsVar2)
+    }
+    p <- ggplot(out.long, aes(x=Var1, y=Var2, color=Mean, size=Frequency)) +
+    geom_point() +
+    #     scale_color_gradient2(low="blue",high="red",mid="orange") +
+    scale_color_distiller(palette="Spectral") +
+    scale_size(range=c(0,3)) +
+    theme(panel.grid.major=element_line(colour="grey50",size=0.2,linetype="dashed"),
+	  axis.text=element_text(size=7),
+	  legend.position="bottom",
+	  legend.direction="horizontal")
+    return(p)
+}
