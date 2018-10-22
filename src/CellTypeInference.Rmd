@@ -5,7 +5,7 @@ date: '`r Sys.Date()`'
 output:
   html_notebook:
     toc: true
-    toc_depth: 2
+    toc_depth: 3
     toc_float: true
     theme: united
     highlight: tango
@@ -84,7 +84,7 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels)) +
 
 __Similarity of Clusters__
 - This overall similarity works quite nicely in reflecting the different lineages that we captured.
-- The bottom group are all immune cells, with the top one (C3-C20) being innate and the bottom one (C17-C7) adaptive
+- The bottom group are all immune cells, with the top one (C3-C20) being myeloid and the bottom one (C17-C7) lymphoid
 - The top group conntains epithelial cells (luminal C4,C14,C19, basal C12) and stromal cells
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 clust <- levels(pD$ClusterLabels)
@@ -143,7 +143,7 @@ sapply(names(markers),function(x) write.csv(markers[[x]],file=paste0("../data/mi
 
 # Immune Cells
 - All cells in turquoise
-
+- All Cd45 positive (C2 and C20 are not, but express other markers of their respective lineages)
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 clust <- c("C1","C2","C3","C7","C10","C15","C16","C17","C20")
 ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels %in% clust)) +
@@ -153,6 +153,8 @@ ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels %in% clust)) +
 
 pD.sub <- pD[pD$ClusterLabels %in% clust,]
 m.sub <- m[,pD.sub$barcode]
+overviewPlot(m, pD, gene="Ptprc")
+overviewPlot(m, pD, gene="Cd19")
 
 pD.sub$ClusterLabels <- factor(pD.sub$ClusterLabels) #drop unused levels
 out <- data.frame(numeric(nrow(m.sub)))
@@ -180,28 +182,11 @@ totCells <- as.vector(table(pD$Condition))
 freqOfClust <- t(t(table(factor(pD.sub$ClusterLabels),pD.sub$Condition))/totCells)
 freqOfClust <- freqOfClust * 100
 kable(freqOfClust,digits=1)
-
-## PCA per sample on immune cells
-out <- data.frame(numeric(nrow(m.sub)))
-colnames(out) <- levels(pD.sub$Condition)[1]
-for (cond in levels(pD.sub$Condition)) {
-    expr <- rowMeans(m.sub[,pD.sub$Condition==cond])
-    colname <- cond
-    out[,colname] <- expr
-}
-
-pcs <- prcomp(t(out))
-pca <- data.frame(pcs$x)
-pca[,"Condition"] <- colnames(out)
-
-ggplot(pca, aes(x=PC1, y=PC2, color=Condition)) +
-    geom_point(size=3)
 ```
 
-## C1 is a T-cell cluster
+## C1 is a T-Cell Cluster
 
-- Expresses the co-stimulatroy T-cell marker Cd28.
-
+- Expresses the co-stimulatory marker Cd28
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C1"
 ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
