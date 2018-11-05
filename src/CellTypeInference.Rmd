@@ -49,8 +49,12 @@ keepgenes <- fD$id[fD$KeepForHvg]
 fD <- fD[rowMeans(m)>0.01 & fD$id %in% keepgenes,]
 m <- m[rowMeans(m)>0.01 & rownames(m) %in% keepgenes,]
 m <- log2(t(t(m)/pD$sf)+1)
-rownames(m) <- fD$symbol
-rownames(m) <- gsub("-",".",rownames(m))
+m <- as(m,"dgCMatrix")
+
+uniqnames <- uniquifyFeatureNames(fD$id,fD$symbol)
+uniqnames <- gsub("-",".",uniqnames)
+fD$uniqnames <- uniqnames
+rownames(m) <- uniqnames
 ```
 
 # Cell type Inference 
@@ -224,37 +228,6 @@ submarkers <- findMarkers(m.sub,
 x <- data.frame(submarkers[[5]])
 x <- x[apply(x,1,min)>0,]
 
-print(overviewPlot(m.sub,pD.sub,clust,"Birc5",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
-      variable="SubClusterLabels"))
-print(overviewPlot(m.sub,pD.sub,clust,"Tnfrsf4",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
-      variable="SubClusterLabels"))
-print(overviewPlot(m.sub,pD.sub,clust,"Cd164",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
-      variable="SubClusterLabels"))
-
-print(overviewPlot(m,pD,clust,"Cd28"))
-print(overviewPlot(m,pD,clust,rownames(markedby)[1]))
-print(overviewPlot(m,pD,clust,"Cd4"))
-print(overviewPlot(m,pD,clust,"Cd8a"))
-
-```
-
-### Substructure
-
-- __Cluster A__ is marked by Tubb5, Hmgb2, Ptma, Ppia, Pfn1, Ran, Hint1, and also has expression of Birc5 which has been implicated in proliferation and expansion of T-cells.
-- __Cluster B__ expresses Ox40 (Tnfrsf4), OX40 is a secondary co-stimulatory immune checkpoint molecule, expressed after 24 to 72 hours following activation.
-- __Cluster C__ expresses Syndecan-1 (Sdc1), Icos and Cd164.
-- __Cluster D__ is marked best by Gata3 and Rora
-- __Cluster E__ is marked best by Ccr7 and Socs3 (might be memory T-cell)
-```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
-pD.sub <- pD[pD$ClusterLabels==clust,]
-m.sub <- m[,pD.sub$barcode]
-ggplot(pD.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubClusterLabels)) +
-    geom_point()
-submarkers <- findMarkers(m.sub,
-			  factor(pD.sub$SubClusterLabels))
-x <- data.frame(submarkers[[5]])
-x <- x[apply(x,1,min)>0,]
-
 subsmp.sub <- subsmp[subsmp$ClusterLabels==clust,]
 ggplot(subsmp.sub, aes(x=factor(SubClusterLabels), fill=Condition)) +
     geom_bar()
@@ -330,6 +303,8 @@ print(overviewPlot(m.sub,pD.sub,clust,"S100a8",dim1="Sub.tSNE1",dim2="Sub.tSNE2"
 print(overviewPlot(m.sub,pD.sub,clust,"Ccl9",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Rgs1",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
   variable="SubClusterLabels"))
+
+clust2 <- c("C2A"="NeutrophilA","C2B"="NeutrophilB","C2C"="NeutrophilC")
 ```
 
 ## C3 is a Macrophage cluster
@@ -388,11 +363,13 @@ print(overviewPlot(m.sub,pD.sub,clust,"Cxcl2",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
   variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Dcstamp",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
   variable="SubClusterLabels"))
+clust3 <- c("C3A"="MacrophageA","C3B"="MacrophageB","C3C"="MacrophageC","C3D"="MacrophageD")
 ```
 
 ## C7 is a B-Cell cluster 
 - This cluster expresses high levels of Jchain and Mzb1. It lacks however the B-Cellmarker Cd19 and Cd72. It is present at a low frequency in all samples apart from the tumour and the other gland of the tumour animal.
 - Expresses part of BCR (Cd79a).
+- Identified it as plasma cell based on expression of blimp1 (Prdm1), Xbp1 and lack of Cd19 is apparently also common on plasma cells, and it has really high levels of Jchain
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C7"
 ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
@@ -408,7 +385,8 @@ pheatmap(mheat,
 	 fontsize=7)
 print(overviewPlot(m,pD,clust,"Jchain"))
 print(overviewPlot(m,pD,clust,"Cd79a"))
-print(overviewPlot(m,pD,clust,"Mzb1"))
+print(overviewPlot(m,pD,clust,"Prdm1"))
+clust7 <- c("C7"="PlasmaCell")
 ```
 
 ## C10 is a T-Cell cluster
@@ -472,7 +450,9 @@ pheatmap(mheat,
 	 cluster_cols=FALSE,
 	 show_colnames=TRUE,
 	 fontsize=7)
-print(overviewPlot(m,pD,clust,"Ebf1"))
+print(overviewPlot(m,pD,clust,"Cd79a"))
+clust15 <- c("C15"="B-Cell")
+
 ```
 
 ## C16 is a monocyte cluster
@@ -509,7 +489,7 @@ ggplot(pD.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubClusterLabels)) +
 
 submarkers <- findMarkers(m.sub,
 			  factor(pD.sub$SubClusterLabels))
-x <- data.frame(submarkers[[4]])
+x <- data.frame(submarkers[[1]])
 x <- x[apply(x,1,min)>0,]
 
 subsmp.sub <- subsmp[subsmp$ClusterLabels==clust,]
@@ -521,6 +501,20 @@ print(overviewPlot(m.sub,pD.sub,clust,"Plac8",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 print(overviewPlot(m.sub,pD.sub,clust,"Lyz2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Fn1",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
 print(overviewPlot(m.sub,pD.sub,clust,"Ccr7",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+
+#C16D is cDC1 because of Itgae (Cd103), Cd8a and Irf8 some of which are activated due to expression of Ccr7 
+print(overviewPlot(m.sub,pD.sub,clust,"Itgae",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Irf8",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Cd8a",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+#C16C is cDC2 because of Itgam (Cd11b)
+print(overviewPlot(m.sub,pD.sub,clust,"Itgam",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+#C16B Ly6c positive, Ccr2 hi, Cd300 pos, cd244 pos, (?inflammtory DCs) 
+print(overviewPlot(m.sub,pD.sub,clust,"Ly6c1",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Cd300lf",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+print(overviewPlot(m.sub,pD.sub,clust,"Ccr2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+#C16A
+print(overviewPlot(m.sub,pD.sub,clust,"Sepp1",dim1="Sub.tSNE1",dim2="Sub.tSNE2", variable="SubClusterLabels"))
+
 ```
 
 ## C17 is a NK cell cluster
