@@ -116,7 +116,7 @@ plot(dendr,horiz=TRUE,yaxt="n")
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE}
 overviewPlot <- function(m,pD,cluster,gene,
-			 dim1="tSNE1",dim2="tSNE2",
+			 dim1="UMAP1",dim2="UMAP2",
 			 variable="ClusterLabels") {
     require(cowplot)
     require(viridis)
@@ -150,7 +150,7 @@ sapply(names(markers),function(x) write.csv(markers[[x]],file=paste0("../data/mi
 - All Cd45 positive (C2 and C20 are not, but express other markers of their respective lineages)
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 clust <- c("C1","C2","C3","C7","C10","C15","C16","C17","C20")
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels %in% clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels %in% clust)) +
     geom_point() +
     theme_void() +
     theme(legend.position="none") 
@@ -193,7 +193,7 @@ kable(freqOfClust,digits=1)
 - Expresses the co-stimulatory marker Cd28
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C1"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -254,7 +254,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Ccr7",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - These are neutrophils according to (http://cancerimmunolres.aacrjournals.org/content/canimm/early/2014/05/06/2326-6066.CIR-13-0209.full.pdf)
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C2"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -315,7 +315,7 @@ clust2 <- c("C2A"="NeutrophilA","C2B"="NeutrophilB","C2C"="NeutrophilC")
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 t(t(table(pD$ClusterLabels,pD$Condition))/colSums(table(pD$ClusterLabels,pD$Condition)))["C3",]
 clust <- "C3"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -372,7 +372,7 @@ clust3 <- c("C3A"="MacrophageA","C3B"="MacrophageB","C3C"="MacrophageC","C3D"="M
 - Identified it as plasma cell based on expression of blimp1 (Prdm1), Xbp1 and lack of Cd19 is apparently also common on plasma cells, and it has really high levels of Jchain
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C7"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -394,7 +394,7 @@ clust7 <- c("C7"="PlasmaCell")
 - Have higher expression of Ms4a4b, which is apparently inhibitory.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C10"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -439,7 +439,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Evl",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - Ebf1 is an interesting one. It's also expressed in Fbs and controls adipogenesis apparently.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C15"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -460,7 +460,7 @@ clust15 <- c("C15"="B-Cell")
 - Expresses Cd209a and Cd209f, markers of DCs (or Macrophages..) (has been used to determine DCs in other scRNA-seq papers
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C16"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -523,7 +523,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Sepp1",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - Express the NK-cell receptor Klrd1, and also very low levels of Ly49(Klra1).
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C17"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -544,7 +544,7 @@ print(overviewPlot(m,pD,clust,"Klra1"))
 ## C20 is a monocyte cluster
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C20"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -585,7 +585,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Lyz2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", 
 
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- c("C4","C12","C19","C14")
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels %in% clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels %in% clust)) +
     geom_point() +
     theme_void() +
     theme(legend.position="none") 
@@ -645,7 +645,7 @@ ggplot(pca, aes(x=PC1, y=PC2, color=Condition)) +
 - Marked by Tes (which apparently is a tumor suppressor) and other genes
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C4"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -694,7 +694,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Trp53",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - As noted previously there is no further structure detectable in the basal compartment.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C12"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -714,7 +714,7 @@ print(overviewPlot(m,pD,clust,"Epcam"))
 ## C19 is the luminal ER- cluster
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C19"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -761,7 +761,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Basp1",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 ## C14 is a Hormone-sensing epithelial cell cluster
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C14"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -789,7 +789,7 @@ ggplot(pD.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubClusterLabels)) +
 
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
 clust <- c("C5","C6","C8","C9","C13","C18")
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels %in% clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels %in% clust)) +
     geom_point() +
     theme_void() +
     theme(legend.position="none") 
@@ -852,7 +852,7 @@ kable(freqOfClust, digits=1)
 - Tenascin-C (Tsn) is expressed specifically in these cells. Has been implicated as funcitonally suportive for various types of cancer (not breast yet).
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C5"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -905,7 +905,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Olfml3",dim1="Sub.tSNE1",dim2="Sub.tSNE2"
 - C6 appears to be a "normal" fibroblast cluster that is less present in the tumor. Appears to be secreting Wnt2.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C6"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -959,7 +959,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Mfap5",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - Not sure if it makes sense to keep it.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C8"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -979,7 +979,7 @@ print(overviewPlot(m,pD,clust,"Mfap5"))
 - Almost not present in the tumor otherwise all samples show it.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C9"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -1033,7 +1033,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Has1",dim1="Sub.tSNE1",dim2="Sub.tSNE2",
 - Present in all samples, depleted in the tumor.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C13"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -1082,7 +1082,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Ier2",dim1="Sub.tSNE1",dim2="Sub.tSNE2", 
 - It appears to be an endothelial cluster due to the expression of various endothelial genes, such as Esam and Eng.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C18"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
@@ -1142,7 +1142,7 @@ print(overviewPlot(m.sub,pD.sub,clust,"Selp",dim1="Sub.tSNE1",dim2="Sub.tSNE2", 
 - Can't find anything that distinguishes them.
 ```{r, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
 clust <- "C11"
-ggplot(pD, aes(x=tSNE1, y=tSNE2, color=ClusterLabels==clust)) +
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=ClusterLabels==clust)) +
     geom_point() 
 markedby <- markers[[clust]]
 markedby <- markedby[apply(markedby[,c(3:ncol(markedby))],1,min)>0,]
