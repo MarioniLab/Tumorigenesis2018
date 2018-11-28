@@ -234,7 +234,7 @@ subCluster <- function(m, clusters, removeGenes=NULL, method="dynamic", ...) {
     out <- out[colnames(m)]
     return(as.factor(out))
 }
-bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE) { 
+bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, angled=TRUE) { 
     out <- data.frame(numeric(length(markers)))
     colnames(out) <- levels(factor(grps))[1]
     out.freq <- out
@@ -265,7 +265,7 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE) {
     lvlsVar2 <- colnames(out)[hclst$order]
     out.long$Var2 <- factor(out.long$Var2, levels=lvlsVar2)
     }
-    p <- ggplot(out.long, aes(x=Var1, y=Var2, color=Mean, size=Frequency)) +
+    p <- ggplot(out.long, aes(x=Var2, y=Var1, color=Mean, size=Frequency)) +
     geom_point() +
     #     scale_color_gradient2(low="blue",high="red",mid="orange") +
     scale_color_distiller(palette="Spectral") +
@@ -273,6 +273,11 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE) {
     theme(panel.grid.major=element_line(colour="grey50",size=0.2,linetype="dashed"),
 	  axis.text=element_text(size=7),
 	  legend.position="bottom",
-	  legend.direction="horizontal")
+	  legend.direction="horizontal") +
+    xlab("") +
+    ylab("")
+    if (angled) {
+    p <- p + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+    }
     return(p)
 }
