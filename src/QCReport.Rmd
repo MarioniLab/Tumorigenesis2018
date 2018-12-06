@@ -224,6 +224,14 @@ pD.pass <- pD[pD$PassAll,]
 genesDetected %+% pD.pass
 LibrarySize %+% pD.pass
 cellViability %+% pD.pass
+# Rename rows of m
+m <- as(m,"dgCMatrix")
+
+uniqnames <- uniquifyFeatureNames(fD$id,fD$symbol)
+uniqnames <- gsub("-",".",uniqnames)
+fD$uniqnames <- uniqnames
+rownames(m) <- uniqnames
+
 out <- list()
 out[["counts"]] <- m
 out[["phenoData"]] <- pD
