@@ -1,3 +1,4 @@
+# SubClustering
 library(RColorBrewer)
 library(reshape2)
 library(plyr)
@@ -15,6 +16,7 @@ library(irlba)
 source("functions.R")
 
 
+# Load Data
 dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
@@ -36,29 +38,28 @@ fD <- fD[keep,]
 
 # Norm and Log
 m <- log2(t(t(m)/pD$sf)+1)
+m <- as(m, "dgCMatrix")
 
-compTsne <-  function(m, fD, cluster,clustering="graph") {
+compCluster <-  function(m, fD, cluster,clustering="graph") {
 	# Highly variable genes
 	hvg <- getHighVar(m,get.var.out=TRUE, supress.plot=TRUE)
-	hvg <- hvg[rownames(hvg) %in% fD$id[fD$KeepForHvg],]
+	hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
 	hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
 
-	# Compute tSNE 
+	# Compute PCA
 	fPCA <- m[hvg,]
 	set.seed(300)
 	pca <- prcomp_irlba(t(fPCA), n=50, center=FALSE, scale.=FALSE)
 	pca <- pca$x
-	set.seed(300)
-	tsn <- Rtsne(pca,perplexity=30,pca=FALSE)
 
 	# Compute Clusters 
 
 	if (clustering=="graph") {
-	    igr <- buildSNNGraph(pca,pc.approx=TRUE,d=NA,transpose=TRUE, k=30)
+	    igr <- buildSNNGraph(pca, d=NA,transpose=TRUE, k=20)
 	    cs <- cluster_louvain(igr)
 	    cs <- cs$membership
 	    clusts <- as.factor(paste0("SC",unname(cs)))
-	    merged <- mergeCluster(m, clusts, maxRep=40, min.DE=15, removeGenes=fD$symbol[!fD$KeepForHvg])
+	    #             merged <- mergeCluster(m, clusts, maxRep=40, min.DE=10, removeGenes=fD$uniqnames[!fD$KeepForHvg])
 	} else {
 	    dis <- dist(pca)
 	    tree <- hclust(dis, method="ward.D2")
@@ -69,53 +70,41 @@ compTsne <-  function(m, fD, cluster,clustering="graph") {
 	    merged <- mergeCluster(m, cs, maxRep=40, min.DE=15, removeGenes=fD$symbol[!fD$KeepForHvg])
 	}
 
-	cs <- paste0(cluster, merged$NewCluster)
+	#         cs <- paste0(cluster, merged$NewCluster)
+	cs <- paste0(cluster, clusts)
 	out <- data.frame("barcode"=colnames(m),
-			  "Sub-tSNE1"=tsn$Y[,1],
-			  "Sub-tSNE2"=tsn$Y[,2],
 			  "Cluster"=cs)
 	return(out)
 }
 
+# Exclude C8 because too small
 clsters <- levels(pD$Cluster)
 clsters <- clsters[clsters!="C8"]
 out <- data.frame()
 
 for (cluster in clsters) {
     m.sub <- m[,pD$barcode[pD$Cluster %in% cluster]]
-    tmp <- compTsne(m.sub, fD, cluster)#, clustering ="hierarchical")
+    tmp <- compCluster(m.sub, fD, cluster)
     out <- rbind(out,tmp)
     print(paste0("Done with", cluster))
 }
 
+# Reformat
 colnames(out)[4] <- "SubCluster"
 pD.sub <- right_join(pD,out,by="barcode")
+pD <- left_join(pD,out,by="barcode")
+pD$SubCluster <- as.character(pD$SubCluster)
+pD$SubCluster[is.na(pD$SubCluster)] <- "C8"
+pD$SubCluster <- as.factor(pD$SubCluster)
 
-plotlist <- list()
-for (clster in levels(pD.sub$Cluster)) {
-    pD.sub.sub <- pD.sub[pD.sub$Cluster==clster,]
-    plotlist[[clster]] <- ggplot(pD.sub.sub, aes(x=Sub.tSNE1, y=Sub.tSNE2, color=SubCluster)) +
-	geom_point () +
-	theme_void()
-}
+# Merge Clusters with less than 15 DE Genes
+merged <- mergeCluster(m, pD$SubCluster, maxRep=40, min.DE=15, removeGenes=fD$uniqnames[!fD$KeepForHvg])
+pD$NewCluster <- merged$NewCluster
 
-pD.sub$SubClusterLabels <- mapvalues(pD.sub$SubCluster,
-				 levels(pD.sub$SubCluster),
-                         	 c("C1A","C1B","C1C","C1D","C1E",
-				   "C10A","C10B","C11A","C11B","C11C",
-				   "C12","C13A","C13B","C13C","C13D",
-				   "C14A","C15","C16A","C16B","C16C","C16D",
-				   "C17","C18A","C18B","C18C","C18D","C18E",
-				   "C18F","C18G","C2A","C2B","C2C","C19A","C19B",
-				   "C19C","C19D","C20A","C20B","C3A","C3B",
-				   "C3C","C3D","C4A","C4B","C4C","C4D","C4E",
-				   "C5A","C5B","C5C","C5D","C6A","C6B","C6C",
-				   "C7","C9A","C9B","C9C","C9D"))
-out <- pD.sub[,c("barcode","SubClusterLabels","Sub.tSNE1","Sub.tSNE2")]
-res <- left_join(pD,out)
-res$SubClusterLabels <- as.character(res$SubClusterLabels)
-res$SubClusterLabels[is.na(res$SubClusterLabels)] <- "C8"
-res$ClusterLabels <- gsub("A$|B$|C$|D$|E$|F$|G$|H$","",res$SubClusterLabels)
+# Rename in a sensible way
+library(gtools)
+pD$FinalCluster <- paste0("C",as.numeric(factor(pD$NewCluster,levels=mixedsort(levels(pD$NewCluster)))))
 
-res <- res[,c("barcode","ClusterLabels","SubClusterLabels","Sub.tSNE1","Sub.tSNE2","Class")]
+# Save
+res <- pD[,c("barcode","Cluster","SubCluster","NewCluster","FinalCluster")]
 write.csv(res,"../data/Robjects/Cluster_final.csv")
