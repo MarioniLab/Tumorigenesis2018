@@ -135,19 +135,21 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
     }
     for (i in counter) {
 	clust.vals <- levels(clusters)
-	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01,...)
+	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01, lfc=1, full.stats=TRUE, ...)
 
 	out <- matrix(nrow=length(clust.vals), ncol=length(clust.vals))
 	colnames(out) <- clust.vals
 	rownames(out) <- clust.vals
 	for (cl in names(marker.list)) {
 	    sb <- marker.list[[cl]]
-	    sb <- as.matrix(sb[,grepl("logFC",colnames(sb))])
+	    sb <- data.frame(sb)
+	    sb <- as.data.frame(sb[,grepl(".log.FDR",colnames(sb))]) # as.data.frame in case it's a single column
 	    if(ncol(sb)==1) {
-		colnames(sb) <- paste0("logFC.",clust.vals[clust.vals!=cl])
+		colnames(sb) <- setdiff(names(marker.list),cl)
+	    } else {
+	    colnames(sb) <- gsub("stats.|.log.FDR","",colnames(sb))
 	    }
-	    sb <- colSums(abs(sb)>=1)
-	    names(sb) <- substr(names(sb),7,nchar(names(sb)))
+	    sb <- colSums(as.matrix(sb) < -2)
 	    sb[cl] <- 0
 	    sb <- sb[match(colnames(out),names(sb))]
 	    out[,cl] <- sb
@@ -163,14 +165,15 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 	    newgrps <- sapply(c(1:max(cs)), function(i) paste(names(cs)[cs==i],collapse="."))
 	    csnew <- mapvalues(cs,c(1:max(cs)), newgrps)
 	    clusters <- mapvalues(clusters,names(csnew),csnew)
-	    if(length(unique(clusters))==1) {
-		break
-	    }
 	} else {
 	    break
 	}
     } else {
 	break}
+
+	if (length(unique(clusters))==1) {
+	    break
+	}
     }
 	output <- list("Marker"=marker.list,
 		       "NumberDE"=out,
