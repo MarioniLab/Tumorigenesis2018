@@ -284,3 +284,47 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     }
     return(p)
 }
+
+quickGSE <- function(deGenes, univrs, ont="BP", method=c("GO","Broad")) {
+    require(org.Mm.eg.db)
+
+    if (method=="GO") {
+    require(topGO)
+    alG <- factor(as.numeric(univrs %in% deGenes))
+    names(alG) <- univrs
+
+    # prepare Data for topGO
+    GO.data <- new("topGOdata", description="Lib GO",ontology=ont, allGenes=alG, 
+		   annot=annFUN.org, mapping="org.Mm.eg.db",
+		   nodeSize=20, ID="symbol")
+    result.classic <- runTest(GO.data, statistic="fisher")
+    output <- GenTable(GO.data, Fisher.classic=result.classic, orderBy="topgoFisher", topNodes=50, numChar=300)
+
+    output$Term <- factor(output$Term, levels=unique(rev(output$Term)))
+    output <- output[output$Fisher.classic < 0.01,]
+    return(output)
+    } 
+
+    if (method=="Broad") {
+	require(reshape2)
+	require(clusterProfiler)
+	load("../data/misc/mouse_H_v5p2.rdata")
+	load("../data/misc/mouse_c2_v5p2.rdata")
+
+	geneset1 <- melt(Mm.H)
+	geneset2 <- melt(Mm.c2)
+	geneset <- rbind(geneset1,geneset2)
+
+	colnames(geneset) <- c("ENTREZID","Geneset")
+	ids <- unique(as.character(geneset$ENTREZID))
+	res <- select(org.Mm.eg.db, keys=ids, column=c("SYMBOL"))
+	geneset <- full_join(geneset,res)
+	geneset <- geneset[!duplicated(geneset),]
+	geneset <- geneset[,c(2:3)]
+	colnames(geneset) <- c("TERM","GENE")
+	out <- enricher(deGenes,universe=univrs,TERM2GENE=geneset,qvalueCutoff=0.01,minGSSize=10)
+	out <- data.frame(out)
+	out$ID <- factor(out$ID, levels=rev(unique(out$ID)))
+	return(out)
+    }
+}
