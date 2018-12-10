@@ -16,62 +16,70 @@ source("functions.R")
 
 
 dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-# dataList <- subSample(dataList,cell.number=10000)
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 rm(dataList)
 sfs <- read.csv("../data/Robjects/SizeFactors.csv")
-cluster <- read.csv("../data/Robjects/CellTypes.csv")
+cluster <- read.csv("../data/Robjects/CellTypes.csv",row.names=1)
 
-rownames(m) <- as.vector(rownames(m))
-
-pD <- right_join(pD,cluster)
+pD <- inner_join(pD,cluster)
 pD <- left_join(pD,sfs)
 
 # Gene and cell filtering
 m <- m[,pD$barcode]
-keep <- rowMeans(m)>0.01
-m <- m[keep,]
-fD <- fD[keep,]
 
 # Norm and Log
 m <- log2(t(t(m)/pD$sf)+1)
+m <- as(m,"dgCMatrix")
 
-compTsne <-  function(m, fD) {
+compUmap <-  function(m, fD, frctHvg=10) {
+	require(umap)
+	keep <- rowMeans(m)>0.01
+	m <- m[keep,]
+
 	# Highly variable genes
 	hvg <- getHighVar(m,get.var.out=TRUE, supress.plot=TRUE)
-	hvg <- hvg[rownames(hvg) %in% fD$id[fD$KeepForHvg],]
-	hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+	hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
+	hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/frctHvg)]
 
-	# Compute tSNE 
-	fPCA <- m[hvg,]
 	set.seed(300)
-	pca <- prcomp_irlba(t(fPCA), n=50, center=FALSE, scale.=FALSE)
-	pca <- pca$x
-	set.seed(300)
-	tsn <- Rtsne(pca,perplexity=50,pca=FALSE)
+	ump <- umap(as.matrix(t(m[hvg,])),min_dist=0.5,,metric="pearson")
+
 	out <- data.frame("barcode"=colnames(m),
-			  "tSNE1"=tsn$Y[,1],
-			  "tSNE2"=tsn$Y[,2])
+			  "UMAP1"=ump$layout[,1],
+			  "UMAP2"=ump$layout[,2])
 	return(out)
 }
 
 
-conds <- list("Epithelial","Fibroblast",c("Lymphoid","Myeloid"))
-out <- data.frame()
+grps <- unique(pD$Groups)
 
-for (cond in conds) {
-    m.sub <- m[,pD$barcode[pD$Class %in% cond]]
-    tmp <- compTsne(m.sub, fD)
+out <- data.frame()
+for (grp in grps) {
+    m.sub <- m[,pD$barcode[pD$Groups %in% grp]]
+    tmp <- compUmap(m.sub, fD)
     out <- rbind(out,tmp)
+    print(paste("Finished",grp))
 }
 
-pD.sub <- right_join(pD,out)
+colnames(out)[2:3] <- paste("Group",colnames(out)[2:3],sep=".")
+pD.out <- right_join(pD,out)
+# ggplot(pD.out, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
+#     geom_point() +
+#     facet_wrap(~Groups) +
+#     scale_color_manual(values=levels(pD.out$Color)) 
 
-pD.sub$Class <- as.character(pD.sub$Class)
-pD.sub$Class[pD.sub$Class %in% c("Lymphoid","Myeloid")] <- "Immune"
-pD.sub$Class <- factor(pD.sub$Class)
+out <- data.frame()
+celltps <- names(table(pD$CellType)[table(pD$CellType)>100])
+for (celltp in celltps) {
+    m.sub <- m[,pD$barcode[pD$CellType %in% celltp]]
+    tmp <- compUmap(m.sub, fD, frctHvg=20)
+    out <- rbind(out,tmp)
+}
+colnames(out)[2:3] <- paste("CellType",colnames(out)[2:3],sep=".")
+pD.out <- left_join(pD.out,out)
 
-res <- pD.sub[,c("barcode","Cluster","Class","tSNE1","tSNE2","Age")]
+
+res <- pD.out[,c("barcode","Group.UMAP1","Group.UMAP2","CellType.UMAP1","CellType.UMAP2")]
 write.csv(file="../data/Robjects/Substructure.csv",res)
