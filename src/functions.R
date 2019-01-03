@@ -285,24 +285,32 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     return(p)
 }
 
-quickGSE <- function(deGenes, univrs, ont="BP", method=c("GO","Broad")) {
+quickGSE <- function(gens, pvals, ont="BP", method=c("GO", "Broad")) {
+    # The sign selects the genes, all positive pvals between 0 and 0.01 will be regarded as significant
     require(org.Mm.eg.db)
-
-    if (method=="GO") {
     require(topGO)
-    alG <- factor(as.numeric(univrs %in% deGenes))
-    names(alG) <- univrs
+    topDiffGenes <- function(allScore) { # topGO requirement..this is so useless..
+	return(allScore < 0.01 & allScore >= 0)
+    }
+    alG <- pvals
+    names(alG) <- gens
 
     # prepare Data for topGO
     GO.data <- new("topGOdata", description="Lib GO",ontology=ont, allGenes=alG, 
-		   annot=annFUN.org, mapping="org.Mm.eg.db",
-		   nodeSize=20, ID="symbol")
-    result.classic <- runTest(GO.data, statistic="fisher")
-    output <- GenTable(GO.data, Fisher.classic=result.classic, orderBy="topgoFisher", topNodes=50, numChar=300)
+		   annot=annFUN.org, mapping="org.Mm.eg.db",geneSelectionFun=topDiffGenes,
+		   nodeSize=5, ID="symbol")
 
-    output$Term <- factor(output$Term, levels=unique(rev(output$Term)))
-    output <- output[output$Fisher.classic < 0.01,]
-    return(output)
+    if (grepl("GO",method)) {
+	# Fisher
+	result.classic <- runTest(GO.data, statistic="fisher",algorithm="weight01")
+	# KS I am just leaving this here in case I want to do this again
+	#         test.stat <- new("classicScore", testStatistic=GOKSTest, name="KS tests")
+	#         result.ks <- getSigGroups(GO.data,test.stat)
+	# Output
+	output <- GenTable(GO.data, Fisher=result.classic, #KS=result.ks, orderBy="KS",
+			   orderBy="Fisher",topNodes=50, numChar=300)
+	output$Term <- factor(output$Term, levels=unique(rev(output$Term)))
+	return(output)
     } 
 
     if (method=="Broad") {
@@ -310,10 +318,12 @@ quickGSE <- function(deGenes, univrs, ont="BP", method=c("GO","Broad")) {
 	require(clusterProfiler)
 	load("../data/misc/mouse_H_v5p2.rdata")
 	load("../data/misc/mouse_c2_v5p2.rdata")
+	load(url("http://bioinf.wehi.edu.au/software/MSigDB/mouse_c7_v5p2.rdata"))
 
 	geneset1 <- melt(Mm.H)
 	geneset2 <- melt(Mm.c2)
-	geneset <- rbind(geneset1,geneset2)
+	geneset3 <- melt(Mm.c7)
+	geneset <- rbind(geneset1,geneset2,geneset3)
 
 	colnames(geneset) <- c("ENTREZID","Geneset")
 	ids <- unique(as.character(geneset$ENTREZID))
@@ -322,7 +332,7 @@ quickGSE <- function(deGenes, univrs, ont="BP", method=c("GO","Broad")) {
 	geneset <- geneset[!duplicated(geneset),]
 	geneset <- geneset[,c(2:3)]
 	colnames(geneset) <- c("TERM","GENE")
-	out <- enricher(deGenes,universe=univrs,TERM2GENE=geneset,qvalueCutoff=0.01,minGSSize=10)
+	out <- enricher(names(gens)[topDiffGenes(gens)],universe=names(gens),TERM2GENE=geneset,qvalueCutoff=0.01,minGSSize=10)
 	out <- data.frame(out)
 	out$ID <- factor(out$ID, levels=rev(unique(out$ID)))
 	return(out)
