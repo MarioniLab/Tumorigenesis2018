@@ -1,8 +1,7 @@
 # To-Do list
 
-## Tumorigenesis
 
-### Analytical
+## Analytical
 
 1. Identify genes for experimental part __(Deadline: 7.12.2018)__
     - Genes as markers for various populations for FACS, staining and qPCR
@@ -16,15 +15,15 @@
    - look up the PIC-seq stuff
    - DE against macrophages with tumor cell singlets as null model?
 
-### Experimental
+## Experimental
 
-0. Talk to Kyren about mice for validation experiment, tumors soon? __(Deadline: 30.11.2018)__
-1. Final decision on MPA/DMBA mice __(Deadline: 30.11.2018)__
-2. Ordering of qPCR primers for validation of tumor pseudotime __(Deadline: 30.11.2018)__
-3. Ordering of antibodies for stainings __(start by 06.12.2018)__
-4. Catalogue of available slides __(Do on 07.12.2018)__
+1. Ordering of qPCR primers for validation of tumor pseudotime __(Deadline: 30.11.2018)__
+2. Catalogue of available slides __(Do on 07.12.2018)__
 
-## Notes
-# Immune cells
+# Notes
+## Immune cells
 - progesterone can regulate the Th1/Th2 phenotype
 - previous studies have suggested that E and P are capable of regulating macrophage distribution in the uterus [https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4204476/pdf/nihms564062.pdf](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4204476/pdf/nihms564062.pdf)
+
+## Status
+- Abs for Mcr1, MMP12, F4/80 otw
