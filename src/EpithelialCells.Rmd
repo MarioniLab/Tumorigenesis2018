@@ -1,0 +1,159 @@
+---
+title: "Epithelial cells in BRCA1 data"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(DT)
+library(scater)
+library(plyr)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(irlba)
+library(reshape2)
+library(gridExtra)
+library(gridGraphics)
+source("functions.R")
+
+dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+m <- dataList[["counts"]]
+pD <- dataList[["phenoData"]]
+pD <- left_join(pD,sfs)
+fD <- dataList[["featureData"]]
+rm(dataList)
+
+anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
+umap <- read.csv("../data/Robjects/UMAP_all.csv")[,-1]
+substructure <- read.csv("../data/Robjects/Substructure.csv")[,-1]
+ttime <- read.csv("../data/Robjects/TumorTime.csv")[,-1]
+pD <- right_join(pD,anno)
+pD <- left_join(pD,umap)
+pD <- left_join(pD,substructure)
+pD <- left_join(pD,ttime)
+
+cellSums <- as.vector(table(pD$ranktumorTime))
+
+pD <- pD[pD$Groups=="Epithelial",]
+m <- m[,pD$barcode]
+pD$CellType <- droplevels(pD$CellType )
+pD$Color <- droplevels(pD$Color)
+# keepgenes <- fD$uniqnames[fD$KeepForHvg]
+m <- log2(t(t(m)/pD$sf)+1)
+m.full <- m <- as(m,"dgCMatrix") #cases where I need all genes for viz
+fD <- fD[rowMeans(m)>0.01,]# & fD$uniqnames %in% keepgenes,]
+m <- m[rowMeans(m)>0.01,]# & rownames(m) %in% keepgenes,]
+rownames(pD) <- pD$barcode
+```
+
+# Overview
+The UMAP below is computed on HVGs for all epithelial cells in the dataset.
+Epithelial cells are defined by the expression of Epcam.
+```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
+library(viridis)
+p0 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    scale_color_brewer(palette="Paired") 
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=ranktumorTime)) +
+    geom_point() +
+    scale_color_viridis(option="B") #+
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p0
+p1
+# overviewplot(m,pD,"Epcam")
+```
+
+## Relationship of Clusters
+Similarity shown as graph abstraction. The thicker the connecting line, the higher the similarity. The bigger the blob, the higher the cell number.
+```{r, fig.width=7, width=7, warning=FALSE, message=FALSE}
+# Highly Variable Genes
+hvg <- getHighVar(m,get.var.out=TRUE,supress.plot=TRUE)
+hvg <- hvg[(rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg]),]	
+hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+set.seed(300)
+igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE,k=10)
+
+# Test Graph abstraction
+library(igraph)
+x <- clusterModularity(igr,pD$CellType,get.values=TRUE)
+obexp <- x$observed/x$expected
+grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
+plot(grph,edge.width=E(grph)$weight*10, vertex.size=as.vector(table(pD$CellType))/100)
+```
+### Change in time of the graph extraction
+The graph abstraction above is computed on all timepoints. It might be more relevant to look at this at the various timepoints.
+Similarity shown as graph abstraction changing over time.
+```{r, fig.width=7, width=7, warning=FALSE, message=FALSE}
+for (i in c(1:8)) {
+    pD.sub <- pD[pD$ranktumorTime==i,]
+    m.sub <- m[,pD.sub$barcode]
+    pD.sub$CellType <- droplevels(pD.sub$CellType)
+    # Highly Variable Genes
+    hvg <- getHighVar(m.sub,get.var.out=TRUE,supress.plot=TRUE)
+    hvg <- hvg[(rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg]),]	
+    hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+    set.seed(300)
+    igr <- buildSNNGraph(m.sub[hvg,],pc.approx=TRUE,k=10)
+
+    # Test Graph abstraction
+    library(igraph)
+    x <- clusterModularity(igr,pD.sub$CellType,get.values=TRUE)
+    obexp <- x$observed/x$expected
+    grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
+    nrmweights <- E(grph)$weight/max(E(grph)$weight)
+    plot(grph,edge.width=nrmweights*5, vertex.size=as.vector(table(pD.sub$CellType))/(nrow(pD.sub)/100))
+    }
+```
+
+## Markers for the various epithelial populations
+```{r, fig.width=4, fig.height=8, warning=FALSE, message=FALSE}
+markers <- findMarkers(m,pD$CellType,pval.type="any")
+genes <- lapply(markers,function(x) rownames(x)[1:30])
+genes <- do.call(c,genes)
+genes <- unique(genes)
+bubblePlot(m, genes, pD$CellType ,angled=FALSE)
+```
+
+## Changes of epithelial composition over time
+The plots below summarize the changes in cluster frequencies over the "tumor time". Relative to either all cells or only within epithelium.
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+tbl <- table(pD$CellType,pD$tumorTime)
+tbl <- t(t(tbl)/cellSums)
+tst <- melt(tbl)
+ggplot(tst, aes(x=Var2,y=value, group=Var1)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~Var1) +
+    ylim(c(0,1)) +
+    ggtitle("Relative to All Cells")
+
+sumry <- group_by(pD, tumorTime, CellType) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+ggplot(sumry, aes(x=tumorTime, y=frac, group=CellType)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~CellType) +
+    ylim(c(0,1)) +
+    ggtitle("Relative to Epithelial")
+```
