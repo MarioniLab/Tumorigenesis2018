@@ -1,0 +1,447 @@
+---
+title: "Myeloid cells in BRCA1 data"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(DT)
+library(scater)
+library(plyr)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(gridExtra)
+library(pheatmap)
+library(irlba)
+library(ggrastr)
+library(reshape2)
+source("functions.R")
+
+dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+m <- dataList[["counts"]]
+pD <- dataList[["phenoData"]]
+pD <- left_join(pD,sfs)
+fD <- dataList[["featureData"]]
+rm(dataList)
+
+anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
+umap <- read.csv("../data/Robjects/UMAP_all.csv")[,-1]
+substructure <- read.csv("../data/Robjects/Substructure.csv")[,-1]
+ttime <- read.csv("../data/Robjects/TumorTime.csv")[,-1]
+pD <- right_join(pD,anno)
+pD <- left_join(pD,umap)
+pD <- left_join(pD,substructure)
+pD <- left_join(pD,ttime)
+
+cellSums <- as.vector(table(pD$ranktumorTime))
+
+pD <- pD[pD$Groups=="Myeloid",]
+m <- m[,pD$barcode]
+pD$CellType <- droplevels(pD$CellType )
+pD$Color <- droplevels(pD$Color)
+# keepgenes <- fD$uniqnames[fD$KeepForHvg]
+m <- log2(t(t(m)/pD$sf)+1)
+m.full <- m <- as(m,"dgCMatrix") #cases where I need all genes for viz
+fD <- fD[rowMeans(m)>0.01,]# & fD$uniqnames %in% keepgenes,]
+m <- m[rowMeans(m)>0.01,]# & rownames(m) %in% keepgenes,]
+rownames(pD) <- pD$barcode
+```
+
+# Overview
+The UMAP below is computed on HVGs for all myeloid cells in the dataset.
+There does not seem to be a single marker for all "myeloid cells". The assignemnt comes rather from the inference of celltypes, e.g. neutrophils, macrophages etc.
+```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
+library(viridis)
+p0 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    scale_color_brewer(palette="Paired") 
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=ranktumorTime)) +
+    geom_point() +
+    scale_color_viridis(option="B") #+
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p0
+p1
+```
+
+## Relationship of Clusters
+Similarity shown as graph abstraction. The thicker the connecting line, the higher the similarity. The bigger the blob, the higher the cell number.
+```{r, fig.width=7, width=7, warning=FALSE, message=FALSE}
+# Highly Variable Genes
+hvg <- getHighVar(m,get.var.out=TRUE,supress.plot=TRUE)
+hvg <- hvg[(rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg]),]	
+hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+set.seed(300)
+igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE,k=10)
+
+# Test Graph abstraction
+library(igraph)
+x <- clusterModularity(igr,pD$CellType,get.values=TRUE)
+obexp <- x$observed/x$expected
+grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
+plot(grph,edge.width=E(grph)$weight*10, vertex.size=as.vector(table(pD$CellType))/100)
+```
+
+## Markers for the various myeloid populations
+```{r, fig.width=4, fig.height=8, warning=FALSE, message=FALSE}
+markers <- findMarkers(m,pD$CellType,pval.type="all")
+genes <- lapply(markers,function(x) rownames(x)[1:10])
+genes <- do.call(c,genes)
+genes <- unique(genes)
+bubblePlot(m, genes, pD$CellType ,angled=FALSE)
+```
+
+## Changes of myeloid composition over time
+The plots below summarize the changes in cluster frequencies over the "tumor time". Relative to either all cells or only within myeloid cells.
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+tbl <- table(pD$CellType,pD$tumorTime)
+tbl <- t(t(tbl)/cellSums)
+tst <- melt(tbl)
+ggplot(tst, aes(x=Var2,y=value, group=Var1)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~Var1) +
+    ylim(c(0,0.2)) +
+    ggtitle("Relative to All Cells")
+
+sumry <- group_by(pD, tumorTime, CellType) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+ggplot(sumry, aes(x=tumorTime, y=frac, group=CellType)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~CellType) +
+    ylim(c(0,0.6)) +
+    ggtitle("Relative to Myleoids")
+```
+
+
+# Macrophages
+- The dataset contains four different clusters of Macrophages (Mp1, Mp2, Tam1, Tam2) that are all marked by the expression of F4/80 (Adgre1).
+- Also Mcs appears to be a macrophage cluster based on being very similar to Mp1, however it has a much smaller library size, it might be a technical artifact.
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+overviewPlot <- function(m,pD,gene,
+			 dim1="Group.UMAP1",dim2="Group.UMAP2",
+			 variable="CellType",bplot=TRUE) {
+    require(cowplot)
+    require(viridis)
+    exps <- data.frame(gene=m[gene,],
+			barcode=colnames(m))
+    colnames(exps)[1] <- gene
+    pD <- left_join(pD,exps)
+    p0 <- ggplot(pD, aes_string(x=variable, y=gene, fill=variable)) +
+	geom_boxplot() +
+	theme(legend.position="none",
+	      axis.text=element_text(size=7))
+
+    p1 <- ggplot(pD, aes_string(x=dim1, y=dim2, color=gene)) +
+	geom_point() +
+	theme_void() +
+	ggtitle(gene) +
+	scale_color_viridis()
+
+    pout <- plot_grid(p1,p0,nrow=1)
+    if (bplot) {
+	return(pout)
+    } else {
+	return(p1)
+    }
+    
+}
+overviewPlot(m,pD,"Adgre1")
+```
+
+### MCs represents a cluster that is highly similar to Mp1 but has a low library size
+- Library size almost as small as neutrophils.
+- In terms of DE there is not much OE compared to other clusters (see above)
+- The fact that it lacks Malat1 and Xist might point to a cluster of damaged (?) cells.
+- In the following I will not include them in the macrophage populations
+```{r, fig.width=6, fig.height=6, warning=FALSE, message=FALSE}
+ggplot(pD, aes(x=CellType, y=log10(UmiSums))) +
+    geom_boxplot()
+overviewPlot(m,pD,"Xist")
+overviewPlot(m,pD,"Malat1")
+```
+
+## Macrophage markers
+```{r, fig.width=5, fig.height=8, warning=FALSE, message=FALSE}
+pD.sub <- pD[pD$CellType %in% c("Mp1","Mp2","Tam1","Tam2"),]
+pD.sub$CellType <- droplevels(pD.sub$CellType)
+m.sub <- m[,pD.sub$barcode]
+markers <- findMarkers(m.sub,pD.sub$CellType,pval.type="all")
+genes <- lapply(markers,function(x) rownames(x)[1:30])
+genes <- do.call(c,genes)
+genes <- unique(genes)
+bubblePlot(m.sub, genes, pD.sub$CellType ,angled=FALSE) + theme(axis.text=element_text(size=8))
+```
+
+### There is no clear relationship to M1/M2 phenotypes
+- I took a number of genes that have been described in the literature as markers for M1/M2 phenotypes to see whether there is a direct relationship to the clusters of macrophages we observe in the data.
+- Neither of the two genesets is in any way exclusive for a particular cluster
+```{r, fig.width=3, fig.height=6, warning=FALSE, message=FALSE}
+m1genes <- c("Cxcl9","Cxcl10","Nos2","Tlr2","Tlr4","Cd80","Cd86","Ccl4",
+	     "Serpine1","Mmp12","Inhba","Ccl7","Clec5a")
+m2genes <- c("Arg1","Retnla","Chil3","Tgm2","Mrc1","Slc40a1","Tlr7",
+	     "Igf1","Adora3","Cd28")
+
+p0 <- bubblePlot(m.sub, m1genes, pD.sub$CellType, cluster_col=FALSE) + ggtitle("M1 Genes") + theme(legend.position="none",
+												   axis.text=element_text(size=9))
+p1 <- bubblePlot(m.sub, m2genes, pD.sub$CellType, cluster_col=FALSE) + ggtitle("M2 Genes") + theme(legend.position="none",
+												   axis.text=element_text(size=9))
+plot_grid(p0,p1)
+```
+
+
+## Macrophage Phenotypes - pre tumor
+- We appear to have two main populations Mp1 and Mp2, 
+- Note that Tam1 and Tam2 are also at very low levels prior to tumor formation.
+  - My hypothesis is that these are directly associated with early lesions, which I'll have to test with Immunos.
+- Remember that __Mp1 peaks before tumor formation__
+- __Mp2 gradually decreases__ in frequency
+
+## Differential Expression (Mp2-Mp1)
+- I am blocking for tumor time in this comparison (doesn't effect the results massively, though)
+- Mp2 (right side) has a "cytokine profile", it expresses various cytokines at high levels compared to Mp1
+- Mp1 (left side) has high expression of some genes involved in carbohydrate metabolism. Glycolysis is apparently an effect of macrophage activation, might be worth checking at these genes in more depth.
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+desgn <- model.matrix(~0+tumorTime+CellType, data=pD)
+comp <- c("CellTypeMp2-CellTypeMp1")
+fit <- limma::lmFit(m,desgn)
+contrast <- limma::makeContrasts(contrasts=comp,
+				 levels=colnames(desgn))
+fit <- limma::contrasts.fit(fit,contrast)
+fit <- limma::treat(fit, lfc=log2(1.2), trend=TRUE, robust=TRUE)
+res <- limma::topTreat(fit,n=Inf)
+res <- res[rownames(res) %in% fD$uniqnames[fD$KeepForHvg],]
+res$Gene <- rownames(res)
+library(ggrepel)
+res$adj.P.Val[res$adj.P.Val==0] <- 10^-316 #for plotting
+volcano <- ggplot(res, aes(x=logFC,y=-log10(adj.P.Val),label=Gene)) +
+    geom_point(size=.5) + 
+    geom_hline(yintercept=2,lty="dashed") +
+    geom_vline(xintercept=log2(1.2),lty="dashed") +
+    geom_vline(xintercept=-log2(1.2),lty="dashed") +
+    geom_text_repel(data=res[1:50,], aes(x=logFC,y=-log10(adj.P.Val),label=Gene)) +
+    ggtitle("Mp2vsMp1")
+
+volcano
+gse <- quickGSE(res$Gene,res$adj.P.Val*sign(res$logFC)) 
+datatable(gse,caption="Significant GOs up-regulated in Mp2 vs Mp1")
+gse <- quickGSE(res$Gene,res$adj.P.Val*sign(res$logFC*-1)) 
+datatable(gse,caption="Significant GOs up-regulated in Mp1 vs Mp2")
+```
+
+## Potential Markers for Immunos
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+overviewPlot(m,pD,"Mrc1")
+overviewPlot(m,pD,"Mmp12")
+overviewPlot(m,pD,"Fcgr4")
+```
+
+# Macrophages - tumor
+- We appear to have two main populations Tam1 and Tam2 
+
+## TAMs are potentially BM derived
+- This is based on two main points
+
+1. Gene expression. According to Jacqui Ly6a suggests BM origin, so is Cx3cr1 (monocytes are recruited to tissues by CCL2 and CX3C),  the are "leaning" towards the neutrophils in the UMAP, which according to Ben is again a hint of being BM derived. None of this is conclusive evidence, though.
+```{r, fig.width=7, fig.height=6, warning=FALSE, message=FALSE}
+overviewPlot(m,pD,"Ly6a")
+overviewPlot(m,pD,"Cx3cr1")
+```
+
+2. Similarity to bone marrow (BM) cells. Below shows the probability of being classified to as BM cells based on the tabula muris dataset. The TAM clusters have higher probability than the Mp clusters, although this signal is not super strong. A PBMC datset might be more useful, haven't found any yet.
+```{r, fig.width=9, fig.height=6, warning=FALSE, message=FALSE, cache=TRUE}
+load("../data/publicData/droplet_Marrow_seurat_tiss.Robj",verbose=TRUE)
+expr <- tiss@data
+cluster <- tiss@meta.data$cell_ontology_class
+cluster <- gsub(" ","_",cluster)
+rownames(expr) <- gsub("-",".",rownames(expr))
+
+# Identify marker genes
+expr <- expr[rowMeans(expr)>0.01,]
+markers <- findMarkers(expr,cluster)
+genes <- lapply(markers, function(x) rownames(x)[1:500])
+genes <- unique(as.character(unlist(genes)))
+genes <- genes[!genes %in% setdiff(genes,rownames(m.full))]
+genes <- rownames(expr)[!rownames(expr) %in% setdiff(rownames(expr),rownames(m.full))]
+
+#remove genes that are not in the m.full dataset, might be dangerous but doesn't influence perfomance too much
+
+labls <- factor(cluster)
+set.seed(300)
+sam <- sample(1:ncol(expr),floor(0.8*ncol(expr)))
+train.labls <- labls[sam]
+train.data <- as.matrix(expr[genes,sam])
+test.labls <- labls[-sam]
+test.data <- as.matrix(expr[genes,-sam])
+
+library(randomForest)
+Tree <- randomForest(x=t(train.data),y=train.labls,
+		     xtest=t(test.data),ytest=test.labls,keep.forest=TRUE)
+# Tree$confusion
+# varImpPlot(Tree,
+#            sort=T,
+#            n.var=20,
+#            main="Top 20 - Variable Importance")
+
+# Predict
+pred <- predict(object=Tree, newdata=t(m.full),type="prob")
+pred <- data.frame(pred)
+pred$Cluster <- pD$CellType
+fP <- melt(pred)
+
+ggplot(fP, aes(x=Cluster,y=value, fill=variable)) +
+    geom_boxplot(outlier.size=0) +
+    theme(legend.position="bottom",legend.direction="horizontal") +
+    ggtitle("Probability of being classified as a BM cell")
+```
+
+## The two TAMs
+- Tam1 (left side) has high expression of MHCII molecules and complement. Enriched for antigen presentation and phagocytosis
+- Tam2 (right side) might be more of a "regulatory type" potentially suppressive (Arg1), and releases NO I think.
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+desgn <- model.matrix(~0+CellType, data=pD)
+comp <- c("CellTypeTam2-CellTypeTam1")
+fit <- limma::lmFit(m,desgn)
+contrast <- limma::makeContrasts(contrasts=comp,
+				 levels=colnames(desgn))
+fit <- limma::contrasts.fit(fit,contrast)
+fit <- limma::treat(fit, lfc=log2(1.2), trend=TRUE, robust=TRUE)
+res <- limma::topTreat(fit,n=Inf)
+res <- res[rownames(res) %in% fD$uniqnames[fD$KeepForHvg],]
+res$Gene <- rownames(res)
+library(ggrepel)
+res$adj.P.Val[res$adj.P.Val==0] <- 10^-316 #for plotting
+volcano <- ggplot(res, aes(x=logFC,y=-log10(adj.P.Val))) +
+    geom_point(size=.5) + 
+    geom_hline(yintercept=2,lty="dashed") +
+    geom_vline(xintercept=log2(1.2),lty="dashed") +
+    geom_vline(xintercept=-log2(1.2),lty="dashed") +
+    geom_text_repel(data=res[1:40,], aes(x=logFC,y=-log10(adj.P.Val),label=Gene)) +
+    ggtitle("Tam2vsTam1")
+
+volcano
+
+
+gse <- quickGSE(res$Gene,res$adj.P.Val*sign(res$logFC)) 
+ 
+datatable(gse,caption="Significant GOs up-regulated in Tam2 vs Tam1")
+
+gse <- quickGSE(res$Gene,res$adj.P.Val*sign(res$logFC*-1)) 
+ 
+datatable(gse,caption="Significant GOs up-regulated in Tam1 vs Tam2")
+```
+
+## Changes in Expression within each cluster
+
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE, cache=TRUE}
+coi.full <- as.matrix(as.data.frame.matrix((table(pD$CellType,pD$ranktumorTime))))
+coi.full <- coi.full[,c(1:7)]
+coi <- coi.full[rowSums(coi.full<=5)<2,]
+```
+- Next, I investigated linear changes in expression over tumor time in clusters that were present with at least 50 cells in all timepoints (hence __excluding__ `r setdiff(rownames(coi.full),rownames(coi))`) This analysis excluded the tumor sample.
+
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE, cache=TRUE}
+out <- data.frame()
+tps <- list()
+for (cluster in rownames(coi)) {
+    cells <- pD$barcode[pD$CellType==cluster & !pD$ranktumorTime %in% c(8)]
+    pD.sub <- pD[cells,]
+    m.sub <- m[,cells]
+    m.sub <- as.matrix(m.sub[rowMeans(m.sub)>0.01 & rownames(m.sub) %in% fD$uniqnames[fD$KeepForHvg],])
+    library(limma)
+    require(viridis)
+    design <- model.matrix(~pD.sub$tumorTime)
+    fit <- lmFit(m.sub, design)
+    fit <- treat(fit, robust=TRUE, trend=TRUE,lfc=log2(1.2))
+    genesUp <- summary(decideTests(fit,coef=2))[,2][3]
+    genesDown <- summary(decideTests(fit,coef=2))[,2][1]
+    tmp  <- data.frame(rbind(c(genesUp,"Up"),c(genesDown,"Down")))
+    colnames(tmp) <- c("DE","Type")
+    tmp$Cluster <- cluster
+    tps[[cluster]] <- topTreat(fit,n=nrow(m.sub),coef=2)
+    out <- rbind(out,tmp)
+}
+out$DE <- as.numeric(as.character(out$DE))
+ggplot(out, aes(x=Cluster, y=DE, fill=Type)) +
+    geom_bar(stat="identity")
+```
+
+## Changes within Mp2
+
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+res <- tps$Mp2
+pD.sub <- pD[pD$CellType=="Mp2",]
+m.sub <- m[,pD$barcode]
+m.sub <- m.sub[rowMeans(m.sub)>0.01,]
+gse <- quickGSE(rownames(res),res$adj.P.Val*sign(res$logFC)) 
+datatable(gse,caption="Significant GOs up-regulated in Mp2 with time")
+gse <- quickGSE(rownames(res),res$adj.P.Val*sign(-1*res$logFC)) 
+datatable(gse,caption="Significant GOs down-regulated in Mp2 with time")
+# overviewPlot(m.sub, pD.sub, gene="", dim1="CellType.UMAP1", dim2="CellType.UMAP2",variable="factor(ranktumorTime)")
+
+```
+
+## Changes within Mp1
+
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+res <- tps$Mp1
+pD.sub <- pD[pD$CellType=="Mp1",]
+m.sub <- m[,pD$barcode]
+m.sub <- m.sub[rowMeans(m.sub)>0.01,]
+gse <- quickGSE(rownames(res),res$adj.P.Val*sign(res$logFC)) 
+datatable(gse,caption="Significant GOs up-regulated in Mp1 with time")
+gse <- quickGSE(rownames(res),res$adj.P.Val*sign(-1*res$logFC)) 
+datatable(gse,caption="Significant GOs down-regulated in Mp1 with time")
+```
+
+# Dendritic Cells
+- The dataset contains at least three different clusters of dendritic cells.
+- I couldn't find a marker that distinguishes DCs from Macrophages.
+- I am a bit uncertain about DcPot
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+overviewPlot(m,pD,"Cd209a")
+```
+
+# Dc209 has more substructure
+- Dc209 also contains pDCs, that might need to be separated.
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+pD.sub <- pD[pD$CellType=="Dc209",]
+m.sub <- m[,pD.sub$barcode]
+overviewPlot(m.sub,pD.sub,"Cd209a",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
+overviewPlot(m.sub,pD.sub,"Ccr7",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
+overviewPlot(m.sub,pD.sub,"Siglech",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
+```
+
+## DE Genes in DCs
+```{r, fig.width=5, fig.height=8, warning=FALSE, message=FALSE}
+pD.sub <- pD[pD$CellType %in% c("mDc","Dc209","DcPot"),]
+pD.sub$CellType <- droplevels(pD.sub$CellType)
+m.sub <- m[,pD.sub$barcode]
+markers <- findMarkers(m.sub,pD.sub$CellType,pval.type="all")
+genes <- lapply(markers,function(x) rownames(x)[1:30])
+genes <- do.call(c,genes)
+genes <- unique(genes)
+bubblePlot(m.sub, genes, pD.sub$CellType ,angled=FALSE) + theme(axis.text=element_text(size=8))
+```
+
