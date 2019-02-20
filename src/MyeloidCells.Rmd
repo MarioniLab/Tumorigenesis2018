@@ -55,8 +55,11 @@ m <- m[,pD$barcode]
 pD$CellType <- droplevels(pD$CellType )
 pD$Color <- droplevels(pD$Color)
 # keepgenes <- fD$uniqnames[fD$KeepForHvg]
-m <- log2(t(t(m)/pD$sf)+1)
-m.full <- m <- as(m,"dgCMatrix") #cases where I need all genes for viz
+sce <- SingleCellExperiment(assays=list(counts=m))
+sizeFactors(sce) <- pD$sf
+sce <- normalize(sce)
+m <- logcounts(sce)
+m.full <- m # for vis of genes
 fD <- fD[rowMeans(m)>0.01,]# & fD$uniqnames %in% keepgenes,]
 m <- m[rowMeans(m)>0.01,]# & rownames(m) %in% keepgenes,]
 rownames(pD) <- pD$barcode
