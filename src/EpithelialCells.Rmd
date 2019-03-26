@@ -183,6 +183,14 @@ ggplot(sumry, aes(x=tumorTime, y=frac, group=CellType)) +
     facet_wrap(~CellType) +
     ylim(c(0,1)) +
     ggtitle("Relative to Epithelial")
+sumry$ranktumorTime <- rank(sumry$tumorTime,ties.method="min")
+ggplot(sumry, aes(x=as.numeric(factor(tumorTime)), y=frac,fill=CellType)) +
+    geom_bar(stat="identity") +
+    ylim(c(0,1)) +
+    ggtitle("Relative to Epithelial") +
+    scale_fill_brewer(palette="Dark2") +
+    xlab("Time") +
+    ylab("Proportion")
 ```
 
 # Integration w previous data
