@@ -338,3 +338,17 @@ quickGSE <- function(gens, pvals, ont="BP", method=c("GO", "Broad")) {
 	return(out)
     }
 }
+
+sumCountsAcrossCells  <- function(m,grps) {
+    # Function to create pseudo-bulk samples from groups (e.g. clusters, samples) of cells
+    grps <- factor(grps) #drop unused levels
+    out <- data.frame(numeric(nrow(m)))
+    colnames(out) <- levels(grps)[1]
+    for (clust in levels(grps)) {
+	expr <- Matrix::rowSums(m[,grps==clust])
+	colname <- clust
+	out[,colname] <- expr
+    }
+    rownames(out) <- rownames(m)
+    return(out)
+}
