@@ -1,0 +1,168 @@
+---
+title: "Testing for differential expression along tumor time"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(DT)
+library(scater)
+library(plyr)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(gridExtra)
+library(pheatmap)
+library(irlba)
+library(ggrastr)
+library(reshape2)
+source("functions.R")
+
+dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+m <- dataList[["counts"]]
+pD <- dataList[["phenoData"]]
+pD <- left_join(pD,sfs)
+fD <- dataList[["featureData"]]
+rm(dataList)
+
+anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
+umap <- read.csv("../data/Robjects/UMAP_all.csv")[,-1]
+substructure <- read.csv("../data/Robjects/Substructure.csv")[,-1]
+ttime <- read.csv("../data/Robjects/TumorTime.csv")[,-1]
+pD <- right_join(pD,anno)
+pD <- left_join(pD,umap)
+pD <- left_join(pD,substructure)
+pD <- left_join(pD,ttime)
+
+cellSums <- as.vector(table(pD$ranktumorTime))
+
+# keepgenes <- fD$uniqnames[fD$KeepForHvg]
+m <- m[,pD$barcode]
+sce <- SingleCellExperiment(assays=list(counts=m))
+sizeFactors(sce) <- pD$sf
+sce <- normalize(sce)
+m <- logcounts(sce)
+rm(sce)
+fD <- fD[rowMeans(m)>0.01,]# & fD$uniqnames %in% keepgenes,]
+m <- m[rowMeans(m)>0.01,]# & rownames(m) %in% keepgenes,]
+rownames(pD) <- pD$barcode
+gc()
+```
+
+# Differences in cluster abundance over time
+-- This needs further work.
+-- Lowly expressed genes are messed up in the DE test (higher threshold?)
+-- Background mRNA correction!
+### Differences in Cluster Composition
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+## Remove the tumor sample
+pD.sub <- pD[pD$tumorTime!=1,]
+
+pD.sub$cluster.sample <- paste0("Cluster_",pD.sub$CellType,"_TumorTime_",pD.sub$tumorTime)
+# remove low cluster.sample combinations
+rmv <- names(which(table(pD.sub$cluster.sample) < 10))
+pD.sub <- pD.sub[!(pD.sub$cluster.sample %in% rmv),]
+
+library(scater)
+# here you want the raw counts
+m.raw <- readRDS("../data/Robjects/ExpressionList.rds")[["counts"]]
+fD.raw <- readRDS("../data/Robjects/ExpressionList.rds")[["featureData"]]
+
+rownames(m.raw) <- gsub("-",".",uniquifyFeatureNames(fD.raw$id,fD.raw$symbol))
+
+m.raw <- m.raw[,pD.sub$barcode]
+summed.full <- sumCountsAcrossCells(m.raw,pD.sub$cluster.sample)
+
+#
+out <- list()
+for (cl in levels(pD.sub$CellType)) {
+    keep <- grep(paste0("^Cluster_", cl), colnames(summed.full))
+    if (length(keep)>=5) {
+	summed <- summed.full[,keep]
+	# dim(summed)
+	# head(colnames(summed))
+
+	# remove low lib sizes
+	library(edgeR)
+	y.exp <- DGEList(summed)
+	discarded <- isOutlier(y.exp$samples$lib.size, log=TRUE, type="lower")
+	y.exp <- y.exp[,!discarded]
+
+	# remove lowly expressed genes
+	keep <- aveLogCPM(y.exp) > aveLogCPM(1, lib.size=mean(y.exp$samples$lib.size))
+	y.exp <- y.exp[keep,]
+	# summary(keep)
+
+	# normalization
+	y.exp <- calcNormFactors(y.exp)
+	y.exp$samples
+
+	sample.time <- as.numeric(unlist(lapply(strsplit(colnames(y.exp$counts),"_"),function(x) x[4])))
+	dsgn <- model.matrix(~sample.time)
+
+	# Dispersion estimation
+	y.exp <- estimateDisp(y.exp, dsgn)
+	# summary(y.exp$trended.dispersion)
+	#         plotBCV(y.exp)
+
+	# QL dispersion
+	fit.exp <- glmQLFit(y.exp, dsgn, robust=TRUE)
+	# summary(fit.exp$var.prior)
+	# summary(fit.exp$df.prior)
+	#         plotQLDisp(fit.exp)  
+
+	# DE test
+	#         con <- makeContrasts(statusBRCA1 - statusNormal, levels=dsgn)
+	res.exp <- glmQLFTest(fit.exp)#, contrast=con)
+	top <- topTags(res.exp, n=16876)$table
+	out[[cl]] <- top[top$FDR < 0.1,]
+    } 
+}
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+overviewPlot <- function(m,pD,gene,
+			 dim1="Group.UMAP1",dim2="Group.UMAP2",
+			 variable="CellType",bplot=TRUE) {
+    require(cowplot)
+    require(viridis)
+    exps <- data.frame(gene=m[gene,],
+			barcode=colnames(m))
+    colnames(exps)[1] <- gene
+    pD <- left_join(pD,exps)
+    p0 <- ggplot(pD, aes_string(x=variable, y=gene, fill=variable)) +
+	geom_boxplot() +
+	geom_point() +
+	theme(legend.position="none",
+	      axis.text=element_text(size=7))
+
+    p1 <- ggplot(pD, aes_string(x=dim1, y=dim2, color=gene)) +
+	geom_point() +
+	theme_void() +
+	ggtitle(gene) +
+	scale_color_viridis()
+
+    pout <- plot_grid(p1,p0,nrow=1)
+    if (bplot) {
+	return(p0)
+    } else {
+	return(p1)
+    }
+    
+}
+overviewPlot(m[,pD$CellType=="Mp2"],pD[pD$CellType=="Mp2",],"Apold1",variable="factor(ranktumorTime)")
+```
