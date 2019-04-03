@@ -103,7 +103,8 @@ for (cl in levels(pD.sub$CellType)) {
 	y.exp <- y.exp[,!discarded]
 
 	# remove lowly expressed genes
-	keep <- aveLogCPM(y.exp) > aveLogCPM(1, lib.size=mean(y.exp$samples$lib.size))
+	keep <- aveLogCPM(y.exp) > aveLogCPM(10, lib.size=mean(y.exp$samples$lib.size))
+	keep <- keep & rowSums(cpm(y.exp)>0)>=3 #Also require gene to be expressed in min 3 samples
 	y.exp <- y.exp[keep,]
 	# summary(keep)
 
@@ -116,14 +117,14 @@ for (cl in levels(pD.sub$CellType)) {
 
 	# Dispersion estimation
 	y.exp <- estimateDisp(y.exp, dsgn)
-	# summary(y.exp$trended.dispersion)
-	#         plotBCV(y.exp)
+	summary(y.exp$trended.dispersion)
+	plotBCV(y.exp)
 
 	# QL dispersion
 	fit.exp <- glmQLFit(y.exp, dsgn, robust=TRUE)
-	# summary(fit.exp$var.prior)
-	# summary(fit.exp$df.prior)
-	#         plotQLDisp(fit.exp)  
+	summary(fit.exp$var.prior)
+	summary(fit.exp$df.prior)
+	plotQLDisp(fit.exp)  
 
 	# DE test
 	#         con <- makeContrasts(statusBRCA1 - statusNormal, levels=dsgn)
@@ -132,6 +133,42 @@ for (cl in levels(pD.sub$CellType)) {
 	out[[cl]] <- top[top$FDR < 0.1,]
     } 
 }
+```
+
+## Ambient mRNA
+- A lot of the DE genes stem from ambient mRNA, see for example `r head(rownames(out[["Fb6"]]))` as DE genes in Fibroblasts.
+- I am followin Aaron's approach by reading in the raw dataFiles
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+library(BiocFileCache)
+bfc <- BiocFileCache("raw_data", ask=FALSE)
+sample.id <- unique(pD$SeqID)
+sample.paths <- character(length(sample.id))
+for (i in seq_along(sample.id)) {
+    fname <- sprintf("Sample%s_matrix.mtx", sample.id[i]) 
+    sample.paths[i] <- bfcrpath(bfc, file.path("../data/rawData/",fname))
+}
+```
+
+```{r}
+collected <- vector("list", length(sample.id))
+for (i in seq_along(collected)) {
+    curmat <- Matrix::readMM(sample.paths[i])
+    is.empty <- Matrix::colSums(curmat) < 100
+    collected[[i]] <- Matrix::rowSums(curmat[,is.empty])
+}
+collected <- do.call(cbind, collected)
+colnames(collected) <- sample.id
+dim(collected)
+
+gene.path <- bfcrpath(bfc, file.path("../data/rawData/","genes.tsv"))
+gene.tab <- read.delim(gene.path, header=FALSE, stringsAsFactors=FALSE)
+rownames(collected) <- uniquifyFeatureNames(gene.tab[,1],gene.tab[,2])
+
+###  MATCHING ROWNAMES
+### SCATER UPDATED UNIQUIFY CHANGED . to _ hence I need to chagne fuckydiefuckfuck
+maaaa <- match(rownames(m.raw), rownames(collected))
+stopifnot(all(!is.na(m))) # sanity check!
+collected <- collected[m,]   
 ```
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
@@ -164,5 +201,6 @@ overviewPlot <- function(m,pD,gene,
     }
     
 }
-overviewPlot(m[,pD$CellType=="Mp2"],pD[pD$CellType=="Mp2",],"Apold1",variable="factor(ranktumorTime)")
+overviewPlot(m[,pD$CellType=="Av"],pD[pD$CellType=="Av",],"S100a9",variable="factor(ranktumorTime)")
+overviewPlot(m,pD,"Hbb.bt",variable="factor(ranktumorTime)")
 ```
