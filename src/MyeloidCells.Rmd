@@ -63,85 +63,6 @@ m.full <- m # for vis of genes
 fD <- fD[rowMeans(m)>0.01,]# & fD$uniqnames %in% keepgenes,]
 m <- m[rowMeans(m)>0.01,]# & rownames(m) %in% keepgenes,]
 rownames(pD) <- pD$barcode
-```
-
-# Overview
-The UMAP below is computed on HVGs for all myeloid cells in the dataset.
-There does not seem to be a single marker for all "myeloid cells". The assignemnt comes rather from the inference of celltypes, e.g. neutrophils, macrophages etc.
-```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
-library(viridis)
-p0 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
-    geom_point() +
-    ggtitle("Cluster") +
-    scale_color_brewer(palette="Paired") 
-    #     theme(legend.position="bottom",
-    #           legend.direction="horizontal")
-p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=ranktumorTime)) +
-    geom_point() +
-    scale_color_viridis(option="B") #+
-    #     theme(legend.position="bottom",
-    #           legend.direction="horizontal")
-p0
-p1
-```
-
-## Relationship of Clusters
-Similarity shown as graph abstraction. The thicker the connecting line, the higher the similarity. The bigger the blob, the higher the cell number.
-```{r, fig.width=7, width=7, warning=FALSE, message=FALSE}
-# Highly Variable Genes
-hvg <- getHighVar(m,get.var.out=TRUE,supress.plot=TRUE)
-hvg <- hvg[(rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg]),]	
-hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
-set.seed(300)
-igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE,k=10)
-
-# Test Graph abstraction
-library(igraph)
-x <- clusterModularity(igr,pD$CellType,get.values=TRUE)
-obexp <- x$observed/x$expected
-grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
-plot(grph,edge.width=E(grph)$weight*10, vertex.size=as.vector(table(pD$CellType))/100)
-```
-
-## Markers for the various myeloid populations
-```{r, fig.width=4, fig.height=8, warning=FALSE, message=FALSE}
-markers <- findMarkers(m,pD$CellType,pval.type="all")
-genes <- lapply(markers,function(x) rownames(x)[1:10])
-genes <- do.call(c,genes)
-genes <- unique(genes)
-bubblePlot(m, genes, pD$CellType ,angled=FALSE)
-```
-
-## Changes of myeloid composition over time
-The plots below summarize the changes in cluster frequencies over the "tumor time". Relative to either all cells or only within myeloid cells.
-```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
-tbl <- table(pD$CellType,pD$tumorTime)
-tbl <- t(t(tbl)/cellSums)
-tst <- melt(tbl)
-ggplot(tst, aes(x=Var2,y=value, group=Var1)) +
-    geom_point() +
-    geom_smooth() +
-    facet_wrap(~Var1) +
-    ylim(c(0,0.2)) +
-    ggtitle("Relative to All Cells")
-
-sumry <- group_by(pD, tumorTime, CellType) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup()
-ggplot(sumry, aes(x=tumorTime, y=frac, group=CellType)) +
-    geom_point() +
-    geom_smooth() +
-    facet_wrap(~CellType) +
-    ylim(c(0,0.6)) +
-    ggtitle("Relative to Myleoids")
-```
-
-
-# Macrophages
-- The dataset contains four different clusters of Macrophages (Mp1, Mp2, Tam1, Tam2) that are all marked by the expression of F4/80 (Adgre1).
-- Also Mcs appears to be a macrophage cluster based on being very similar to Mp1, however it has a much smaller library size, it might be a technical artifact.
-```{r, warning=FALSE, message=FALSE, echo=FALSE}
 overviewPlot <- function(m,pD,gene,
 			 dim1="Group.UMAP1",dim2="Group.UMAP2",
 			 variable="CellType",bplot=TRUE) {
@@ -170,6 +91,106 @@ overviewPlot <- function(m,pD,gene,
     }
     
 }
+
+```
+
+# Overview
+The UMAP below is computed on HVGs for all myeloid cells in the dataset.
+There does not seem to be a single marker for all "myeloid cells". The assignemnt comes rather from the inference of celltypes, e.g. neutrophils, macrophages etc.
+```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
+library(viridis)
+p0 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    scale_color_brewer(palette="Paired") 
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=tumorTime)) +
+    geom_point() +
+    scale_color_viridis(option="B") #+
+    #     theme(legend.position="bottom",
+    #           legend.direction="horizontal")
+p0
+p1
+```
+
+## Relationship of Clusters
+Similarity shown as graph abstraction. The thicker the connecting line, the higher the similarity. The bigger the blob, the higher the cell number.
+```{r, fig.width=7, width=7, warning=FALSE, message=FALSE}
+# Highly Variable Genes
+hvg <- getHighVar(m,get.var.out=TRUE,supress.plot=TRUE)
+hvg <- hvg[(rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg]),]	
+hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+set.seed(300)
+igr <- buildSNNGraph(m[hvg,],pc.approx=TRUE,k=10)
+
+# Test Graph abstraction
+library(igraph)
+x <- clusterModularity(igr,pD$CellType,get.values=TRUE)
+obexp <- x$observed/x$expected
+grph <- graph_from_adjacency_matrix(obexp,weighted=TRUE,diag=FALSE,mode="undirected")
+plot(grph,edge.width=E(grph)$weight*10, vertex.size=as.vector(table(pD$CellType))/100)
+```
+
+## Markers for the various myeloid populations
+```{r, fig.width=4, fig.height=12, warning=FALSE, message=FALSE}
+markers <- findMarkers(m,pD$CellType,pval.type="all")
+genes <- lapply(markers,function(x) rownames(x)[1:20])
+genes <- do.call(c,genes)
+genes <- unique(genes)
+bubblePlot(m, genes, pD$CellType ,angled=FALSE)
+```
+
+## Some markers of myeloid cells
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+overviewPlot(m.full,pD,"Itgae") + ggtitle("Cd103")
+overviewPlot(m.full,pD,"Itgam_ENSMUSG00000030786") + ggtitle("Cd11b")
+overviewPlot(m.full,pD,"Itgax") + ggtitle("Cd11c")
+overviewPlot(m.full,pD,"Siglecf") + ggtitle("Siglec-F")
+overviewPlot(m.full,pD,"Ly6c1") 
+overviewPlot(m.full,pD,"Ly6c2") 
+```
+
+## Changes of myeloid composition over time
+The plots below summarize the changes in cluster frequencies over the "tumor time". Relative to either all cells or only within myeloid cells.
+```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+tbl <- table(pD$CellType,pD$tumorTime)
+tbl <- t(t(tbl)/cellSums)
+tst <- melt(tbl)
+ggplot(tst, aes(x=Var2,y=value, group=Var1)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~Var1) +
+    ylim(c(0,0.2)) +
+    ggtitle("Relative to All Cells")
+
+sumry <- group_by(pD, tumorTime, CellType) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+ggplot(sumry, aes(x=tumorTime, y=frac, group=CellType)) +
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~CellType) +
+    ylim(c(0,0.6)) +
+    ggtitle("Relative to Myleoids")
+
+library(cowplot)
+ggplot(sumry, aes(x=as.numeric(factor(tumorTime)), y=frac,)) +
+    geom_bar(stat="identity",fill="black") +
+    ylim(c(0,0.5)) +
+    facet_wrap(~CellType,nrow=2) +
+    ggtitle("Relative to Myleoids") +
+    xlab("Time") +
+    ylab("Proportion") +
+    theme_pdf()
+```
+
+
+# Macrophages
+- The dataset contains four different clusters of Macrophages (Mp1, Mp2, Tam1, Tam2) that are all marked by the expression of F4/80 (Adgre1).
+- Also Mcs appears to be a macrophage cluster based on being very similar to Mp1, however it has a much smaller library size, it might be a technical artifact.
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
 overviewPlot(m,pD,"Adgre1")
 ```
 
@@ -182,6 +203,7 @@ overviewPlot(m,pD,"Adgre1")
 ggplot(pD, aes(x=CellType, y=log10(UmiSums))) +
     geom_boxplot()
 overviewPlot(m,pD,"Xist")
+overviewPlot(m,pD,"Ly6c2")
 overviewPlot(m,pD,"Malat1")
 ```
 
@@ -403,6 +425,19 @@ gse <- quickGSE(rownames(res),res$adj.P.Val*sign(-1*res$logFC))
 datatable(gse,caption="Significant GOs down-regulated in Mp2 with time")
 # overviewPlot(m.sub, pD.sub, gene="", dim1="CellType.UMAP1", dim2="CellType.UMAP2",variable="factor(ranktumorTime)")
 
+res$Gene <- rownames(res)
+library(ggrepel)
+res$adj.P.Val[res$adj.P.Val==0] <- 10^-316 #for plotting
+volcano <- ggplot(res, aes(x=logFC,y=-log10(adj.P.Val))) +
+    geom_point(size=.5) + 
+    geom_hline(yintercept=2,lty="dashed") +
+    geom_vline(xintercept=log2(1.2),lty="dashed") +
+    geom_vline(xintercept=-log2(1.2),lty="dashed") +
+    geom_text_repel(data=res[1:40,], aes(x=logFC,y=-log10(adj.P.Val),label=Gene)) +
+    ggtitle("Mp2OverTime")
+
+volcano
+
 ```
 
 ## Changes within Mp1
@@ -416,6 +451,19 @@ gse <- quickGSE(rownames(res),res$adj.P.Val*sign(res$logFC))
 datatable(gse,caption="Significant GOs up-regulated in Mp1 with time")
 gse <- quickGSE(rownames(res),res$adj.P.Val*sign(-1*res$logFC)) 
 datatable(gse,caption="Significant GOs down-regulated in Mp1 with time")
+
+res$Gene <- rownames(res)
+library(ggrepel)
+res$adj.P.Val[res$adj.P.Val==0] <- 10^-316 #for plotting
+volcano <- ggplot(res, aes(x=logFC,y=-log10(adj.P.Val))) +
+    geom_point(size=.5) + 
+    geom_hline(yintercept=2,lty="dashed") +
+    geom_vline(xintercept=log2(1.2),lty="dashed") +
+    geom_vline(xintercept=-log2(1.2),lty="dashed") +
+    geom_text_repel(data=res[1:40,], aes(x=logFC,y=-log10(adj.P.Val),label=Gene)) +
+    ggtitle("Mp1OverTime")
+
+volcano
 ```
 
 # Dendritic Cells
@@ -429,8 +477,31 @@ overviewPlot(m,pD,"Cd209a")
 # Dc209 has more substructure
 - Dc209 also contains pDCs, that might need to be separated.
 ```{r, warning=FALSE, message=FALSE, echo=FALSE}
-pD.sub <- pD[pD$CellType=="Dc209",]
+pD.sub <- pD[pD$CellType %in% c("Dc209","mDc"),]
 m.sub <- m[,pD.sub$barcode]
+
+m.sub <- m.sub[Matrix::rowMeans(m.sub)>0.01,]
+
+# Highly variable genes
+hvg <- getHighVar(m.sub,get.var.out=TRUE, supress.plot=F)
+hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
+hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/20)]
+
+library(umap)
+ump <- umap(as.matrix(t(m.sub[hvg,])), min_dist=0.5, metric="pearson", random_state=42)
+pD.sub$UMAP1 <- ump$layout[,1]
+pD.sub$UMAP2 <- ump$layout[,2]
+
+library(destiny)
+set.seed(300)
+dm <- DiffusionMap(t(as.matrix(m.sub[hvg,])))
+dms <- eigenvectors(dm)
+pD.sub$DC1 <- dms[,1]
+pD.sub$DC2 <- dms[,2]
+
+overviewPlot(m.sub,pD.sub,"Ccr7",dim1="DC1",dim2="DC2",bplot=FALSE) + facet_wrap(~ranktumorTime,nrow=1) +
+    theme_bw(base_size=14)
+
 overviewPlot(m.sub,pD.sub,"Cd209a",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
 overviewPlot(m.sub,pD.sub,"Ccr7",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
 overviewPlot(m.sub,pD.sub,"Siglech",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
