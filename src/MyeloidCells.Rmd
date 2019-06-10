@@ -111,6 +111,7 @@ p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=tumorTime)) +
     #     theme(legend.position="bottom",
     #           legend.direction="horizontal")
 p0
+ggsave("MyeloidCells.svg")
 p1
 ```
 
@@ -135,10 +136,12 @@ plot(grph,edge.width=E(grph)$weight*10, vertex.size=as.vector(table(pD$CellType)
 ## Markers for the various myeloid populations
 ```{r, fig.width=4, fig.height=12, warning=FALSE, message=FALSE}
 markers <- findMarkers(m,pD$CellType,pval.type="all")
-genes <- lapply(markers,function(x) rownames(x)[1:20])
+genes <- lapply(markers,function(x) rownames(x)[1:5])
 genes <- do.call(c,genes)
 genes <- unique(genes)
-bubblePlot(m, genes, pD$CellType ,angled=FALSE)
+library(viridis)
+bubblePlot(m, genes, pD$CellType ,angled=FALSE) %+% coord_flip() %+% scale_color_viridis(option="C")
+ggsave("MyeloidExpression.svg",width=10, height=3.5)
 ```
 
 ## Some markers of myeloid cells
@@ -184,6 +187,33 @@ ggplot(sumry, aes(x=as.numeric(factor(tumorTime)), y=frac,)) +
     xlab("Time") +
     ylab("Proportion") +
     theme_pdf()
+
+# Ribbon plot
+sumry <- group_by(pD, tumorTime, CellType) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup() # %>%
+#     mutate(cumfrac=cumsum(frac)) %>%
+#     ungroup()
+
+comb <- table(sumry$CellType,sumry$tumorTime) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+add.missing <- data.frame("CellType"=rownames(missing.comb),
+		  "tumorTime"=colnames(comb)[missing.comb[,"col"]],
+		  "frac"=0,
+		  "n"=0)
+sumry <- rbind(sumry,add.missing)
+sumry <- arrange(sumry, tumorTime, CellType) %>%
+    group_by(tumorTime) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+ggplot(sumry, aes(x=as.numeric(tumorTime), ymin=cumfrac-frac, ymax=cumfrac,
+		  fill=CellType)) +
+    geom_ribbon() +
+    scale_fill_brewer(palette="Paired") +
+    xlab("Tumor Development") +
+    ylab("Fraction of Cells")
+ggsave("MyeloidFrequency.pdf")
 ```
 
 
@@ -248,6 +278,29 @@ plot_grid(p0,p1)
 - Mp2 (right side) has a "cytokine profile", it expresses various cytokines at high levels compared to Mp1
 - Mp1 (left side) has high expression of some genes involved in carbohydrate metabolism. Glycolysis is apparently an effect of macrophage activation, might be worth checking at these genes in more depth.
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
+
+## Option 1
+cells <- pD$barcode[pD$CellType %in% c("Mp1","Mp2")]
+pD.sub <- pD[cells,]
+m.sub <- m[,cells]
+m.sub <- m.sub[rowMeans(m.sub)>0.01,]
+
+test <- findMarkers(m.sub,clusters=factor(pD.sub$CellType),
+		    block=factor(pD.sub$Sample),full.stats=TRUE, lfc=0.5)
+res <- data.frame(test[[1]][[4]])
+res$Gene <- rownames(res)
+volcano <- ggplot(res, aes(x=logFC,y=-log.FDR)) +
+    geom_point(size=1) + 
+    geom_hline(yintercept=2,lty="dashed") +
+    geom_vline(xintercept=log2(1.2),lty="dashed") +
+    geom_vline(xintercept=-log2(1.2),lty="dashed") +
+    geom_text_repel(data=res[1:30,], aes(x=logFC,y=-log.FDR,label=Gene)) +
+    ggtitle("Mp2vsMp1")
+
+ggsave("Volcano.pdf",height=7,width=7)
+
+
+## Option 2
 desgn <- model.matrix(~0+tumorTime+CellType, data=pD)
 comp <- c("CellTypeMp2-CellTypeMp1")
 fit <- limma::lmFit(m,desgn)
@@ -290,8 +343,12 @@ overviewPlot(m,pD,"Fcgr4")
 
 1. Gene expression. According to Jacqui Ly6a suggests BM origin, so is Cx3cr1 (monocytes are recruited to tissues by CCL2 and CX3C),  the are "leaning" towards the neutrophils in the UMAP, which according to Ben is again a hint of being BM derived. None of this is conclusive evidence, though.
 ```{r, fig.width=7, fig.height=6, warning=FALSE, message=FALSE}
-overviewPlot(m,pD,"Ly6a")
-overviewPlot(m,pD,"Cx3cr1")
+overviewPlot(m,pD,"Ly6a",bplot=FALSE) + scale_color_viridis(option="C")
+ggsave("Ly6a.pdf")
+overviewPlot(m,pD,"Cx3cr1",bplot=FALSE) + scale_color_viridis(option="C")
+ggsave("Cx3cr1.pdf")
+overviewPlot(m,pD,"Ms4a7",bplot=FALSE) + scale_color_viridis(option="C")
+ggsave("Ms4a7.pdf")
 ```
 
 2. Similarity to bone marrow (BM) cells. Below shows the probability of being classified to as BM cells based on the tabula muris dataset. The TAM clusters have higher probability than the Mp clusters, although this signal is not super strong. A PBMC datset might be more useful, haven't found any yet.
@@ -477,7 +534,7 @@ overviewPlot(m,pD,"Cd209a")
 # Dc209 has more substructure
 - Dc209 also contains pDCs, that might need to be separated.
 ```{r, warning=FALSE, message=FALSE, echo=FALSE}
-pD.sub <- pD[pD$CellType %in% c("Dc209","mDc"),]
+pD.sub <- pD[pD$CellType %in% c("Dc209","DcPot","mDc"),]
 m.sub <- m[,pD.sub$barcode]
 
 m.sub <- m.sub[Matrix::rowMeans(m.sub)>0.01,]
@@ -500,7 +557,27 @@ pD.sub$DC1 <- dms[,1]
 pD.sub$DC2 <- dms[,2]
 
 overviewPlot(m.sub,pD.sub,"Ccr7",dim1="DC1",dim2="DC2",bplot=FALSE) + facet_wrap(~ranktumorTime,nrow=1) +
-    theme_bw(base_size=14)
+    scale_color_viridis(option="C")
+
+plotlist <- list()
+exps <- data.frame(gene=m.sub["Ccr7",],
+		    barcode=colnames(m.sub))
+colnames(exps)[1] <- "Ccr7"
+fp <- left_join(pD.sub,exps)
+fp$Ccr7 <- scale(fp$Ccr7)
+for (i in seq_along(unique(fp$ranktumorTime))) {
+    plotlist[[i]] <- ggplot(fp, aes(x=DC1, y=DC2)) +
+	geom_point(color="grey80") +
+	theme(axis.ticks=element_blank(),axis.text=element_blank()) +
+	ylab("") +
+	xlab("") + 
+	geom_point(data=fp[fp$ranktumorTime==i,], size=2.5, pch=21, aes(x=DC1, y=DC2, fill=Ccr7)) +
+	scale_fill_viridis(option="C",begin=0,end=max(fp[fp$ranktumorTime==i,"Ccr7"])/max(fp$Ccr7)) +
+	theme(legend.position="none")
+}
+
+plot_grid(plotlist=plotlist,nrow=1)
+ggsave("DendCells.svg",width=20,height=2.5)
 
 overviewPlot(m.sub,pD.sub,"Cd209a",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
 overviewPlot(m.sub,pD.sub,"Ccr7",dim1="CellType.UMAP1",dim2="CellType.UMAP2",bplot=FALSE)
