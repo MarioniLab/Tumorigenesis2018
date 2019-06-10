@@ -69,7 +69,7 @@ library(viridis)
 p0 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=CellType)) +
     geom_point() +
     ggtitle("Cluster") +
-    scale_color_brewer(palette="Paired") 
+    scale_color_brewer(palette="Set2") 
     #     theme(legend.position="bottom",
     #           legend.direction="horizontal")
 p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=ranktumorTime)) +
@@ -78,6 +78,7 @@ p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, color=ranktumorTime)) +
     #     theme(legend.position="bottom",
     #           legend.direction="horizontal")
 p0
+ggsave("UmapEpithelial.svg")
 p1
 # overviewplot(m,pD,"Epcam")
 
@@ -153,11 +154,12 @@ plot_grid(plotlist=plist)
 
 ## Markers for the various epithelial populations
 ```{r, fig.width=4, fig.height=8, warning=FALSE, message=FALSE}
-markers <- findMarkers(m,pD$CellType,pval.type="any")
-genes <- lapply(markers,function(x) rownames(x)[1:30])
+markers <- findMarkers(m,pD$CellType,pval.type="all")
+genes <- lapply(markers,function(x) rownames(x)[1:5])
 genes <- do.call(c,genes)
 genes <- unique(genes)
-bubblePlot(m, genes, pD$CellType ,angled=FALSE)
+p <- bubblePlot(m, genes, pD$CellType ,angled=TRUE) + coord_flip() + scale_color_viridis(option="C")
+ggsave("ExpressionEpithelial.pdf",width=8,height=3.5)
 ```
 
 ## Changes of epithelial composition over time
@@ -191,6 +193,35 @@ ggplot(sumry, aes(x=as.numeric(factor(tumorTime)), y=frac,fill=CellType)) +
     scale_fill_brewer(palette="Dark2") +
     xlab("Time") +
     ylab("Proportion")
+
+
+# Ribbon plot
+sumry <- group_by(pD, tumorTime, CellType) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup() # %>%
+#     mutate(cumfrac=cumsum(frac)) %>%
+#     ungroup()
+
+comb <- table(sumry$CellType,sumry$tumorTime) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+add.missing <- data.frame("CellType"=rownames(missing.comb),
+		  "tumorTime"=colnames(comb)[missing.comb[,"col"]],
+		  "frac"=0,
+		  "n"=0)
+sumry <- rbind(sumry,add.missing)
+sumry <- arrange(sumry, tumorTime, CellType) %>%
+    group_by(tumorTime) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+ggplot(sumry, aes(x=as.numeric(tumorTime), ymin=cumfrac-frac, ymax=cumfrac,
+		  fill=CellType)) +
+    geom_ribbon() +
+    scale_fill_brewer(palette="Set2") +
+    xlab("Tumor Development") +
+    ylab("Fraction of Cells")
+ggsave("RibbonEpithelial.svg")
 ```
 
 # Integration w previous data
