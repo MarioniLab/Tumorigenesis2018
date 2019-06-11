@@ -31,18 +31,18 @@ library(ggrastr)
 library(reshape2)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 pD <- left_join(pD,sfs)
 fD <- dataList[["featureData"]]
 rm(dataList)
 
-anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
-umap <- read.csv("../data/Robjects/UMAP_all.csv")[,-1]
-substructure <- read.csv("../data/Robjects/Substructure.csv")[,-1]
-ttime <- read.csv("../data/Robjects/TumorTime.csv")[,-1]
+anno <- read.csv("../data/firstBatch_Robjects/CellTypes.csv")[,-1]
+umap <- read.csv("../data/firstBatch_Robjects/UMAP_all.csv")[,-1]
+substructure <- read.csv("../data/firstBatch_Robjects/Substructure.csv")[,-1]
+ttime <- read.csv("../data/firstBatch_Robjects/TumorTime.csv")[,-1]
 pD <- right_join(pD,anno)
 pD <- left_join(pD,umap)
 pD <- left_join(pD,substructure)

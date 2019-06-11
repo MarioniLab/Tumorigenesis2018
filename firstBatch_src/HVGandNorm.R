@@ -6,7 +6,7 @@ library(Rtsne)
 library(limSolve)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 # set.seed(300)
 # dataList <- subSample(dataList, cell.number=5000)
 m <- dataList[["counts"]]
@@ -28,4 +28,4 @@ pD$sf <- computeSumFactors(m, sizes=seq(20,min(100,minSize),5),clusters=clusters
 plot(log10(colSums(m))~log10(pD$sf),main="Library Size versus Size Factors")
 
 out <- pD[,c("barcode","sf")]
-write.table(file="../data/Robjects/SizeFactors.csv", out, row.names=FALSE, sep=",")
+write.table(file="../data/firstBatch_Robjects/SizeFactors.csv", out, row.names=FALSE, sep=",")

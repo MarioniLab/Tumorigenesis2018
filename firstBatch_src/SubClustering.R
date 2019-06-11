@@ -17,13 +17,13 @@ source("functions.R")
 
 
 # Load Data
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 rm(dataList)
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
-cluster <- read.csv("../data/Robjects/Cluster_all.csv")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
+cluster <- read.csv("../data/firstBatch_Robjects/Cluster_all.csv")
 
 rownames(m) <- as.vector(rownames(m))
 
@@ -107,4 +107,4 @@ pD$FinalCluster <- paste0("C",as.numeric(factor(pD$NewCluster,levels=mixedsort(l
 
 # Save
 res <- pD[,c("barcode","Cluster","SubCluster","NewCluster","FinalCluster")]
-write.csv(res,"../data/Robjects/Cluster_final.csv")
+write.csv(res,"../data/firstBatch_Robjects/Cluster_final.csv")

@@ -15,14 +15,14 @@ library(irlba)
 source("functions.R")
 
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 # dataList <- subSample(dataList,cell.number=10000)
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 rm(dataList)
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
-cluster <- read.csv("../data/Robjects/Cluster_all.csv")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
+cluster <- read.csv("../data/firstBatch_Robjects/Cluster_all.csv")
 
 rownames(m) <- as.vector(rownames(m))
 
@@ -69,7 +69,7 @@ ggplot(epi, aes(x=DC1,y=DC2,color=branch)) +
     geom_point() 
 
 out <- epi[,c("barcode","DC1","DC2","DC3","DC4","DC5","branch","DMcluster")]
-write.csv(out,file="../data/Robjects/DiffusionMap_Epithelium_Cluster.csv")
+write.csv(out,file="../data/firstBatch_Robjects/DiffusionMap_Epithelium_Cluster.csv")
 
 # subs <- epi$barcode[epi$DMcluster %in% c(2,3,5)]
 # m.sub <- m[,subs]

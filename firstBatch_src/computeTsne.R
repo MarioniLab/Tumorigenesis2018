@@ -10,10 +10,10 @@ library(cowplot)
 library(irlba)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 pD.full <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 pD.full <- right_join(pD.full, sfs)
 conds <- list("38","41","46","53",
 	      c("38","41"),c("38","41","53"),
@@ -68,7 +68,7 @@ for (bc in batchCor) {
 
 	# tSNE
 	out <- pD[,c("barcode","tSNE1","tSNE2")]
-	filename <- paste0("../data/Robjects/tSNE_",paste(cond,collapse="-"),"_",bc,".csv")
+	filename <- paste0("../data/firstBatch_Robjects/tSNE_",paste(cond,collapse="-"),"_",bc,".csv")
 	write.csv(out,file=filename,row.names=FALSE,quote=FALSE)
     }
 }

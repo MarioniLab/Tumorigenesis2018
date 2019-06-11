@@ -15,13 +15,13 @@ library(irlba)
 source("functions.R")
 
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 rm(dataList)
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
-cluster <- read.csv("../data/Robjects/CellTypes.csv",row.names=1)
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
+cluster <- read.csv("../data/firstBatch_Robjects/CellTypes.csv",row.names=1)
 
 pD <- inner_join(pD,cluster)
 pD <- left_join(pD,sfs)
@@ -82,4 +82,4 @@ pD.out <- left_join(pD.out,out)
 
 
 res <- pD.out[,c("barcode","Group.UMAP1","Group.UMAP2","CellType.UMAP1","CellType.UMAP2")]
-write.csv(file="../data/Robjects/Substructure.csv",res)
+write.csv(file="../data/firstBatch_Robjects/Substructure.csv",res)

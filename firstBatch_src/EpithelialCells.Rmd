@@ -30,18 +30,18 @@ library(gridExtra)
 library(gridGraphics)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 pD <- left_join(pD,sfs)
 fD.full <- dataList[["featureData"]]
 rm(dataList)
 
-anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
-umap <- read.csv("../data/Robjects/UMAP_all.csv")[,-1]
-substructure <- read.csv("../data/Robjects/Substructure.csv")[,-1]
-ttime <- read.csv("../data/Robjects/TumorTime.csv")[,-1]
+anno <- read.csv("../data/firstBatch_Robjects/CellTypes.csv")[,-1]
+umap <- read.csv("../data/firstBatch_Robjects/UMAP_all.csv")[,-1]
+substructure <- read.csv("../data/firstBatch_Robjects/Substructure.csv")[,-1]
+ttime <- read.csv("../data/firstBatch_Robjects/TumorTime.csv")[,-1]
 pD <- right_join(pD,anno)
 pD <- left_join(pD,umap)
 pD <- left_join(pD,substructure)
@@ -230,7 +230,7 @@ ggsave("RibbonEpithelial.svg")
 - Below is the integration and a UMAP visualization of all virigin wildtype samples to check overlap
 ```{r, fig.width=10, fig.height=5, warning=FALSE, message=FALSE, cache=TRUE}
 # Load
-mDat <- readRDS("../data/Robjects/ExpressionList_Mapped_fastMNN.rds")
+mDat <- readRDS("../data/firstBatch_Robjects/ExpressionList_Mapped_fastMNN.rds")
 m.cor <- mDat[["counts"]]
 pD.cor <- mDat[["phenoData"]]
 m.uncor <- mDat[["uncor"]]
@@ -245,7 +245,7 @@ m.uncor <- m.uncor[,pD.cor$barcode]
 # Add cluster annotation
 pD.cor <- left_join(pD.cor,pD[,c("barcode","CellType","ranktumorTime","tumorTime")])
 # for mamgland data
-mDatanno <- read.csv("../data/Robjects/MammGland_Cluster.csv")
+mDatanno <- read.csv("../data/firstBatch_Robjects/MammGland_Cluster.csv")
 colnames(mDatanno) <- c("barcode","OldCluster")
 pD.cor <- left_join(pD.cor, mDatanno)
 # for lintracing data
@@ -288,7 +288,7 @@ plot_grid(p0,p1)
 ## RF on development data
 - Are there cells in the Av cluster that don't look like alveolar cells anymore?
 ```{r, fig.width=10, fig.height=5, warning=FALSE, message=FALSE}
-mamDat <- readRDS("../data/Robjects/MamGlandData_QCnormclustered.rds")
+mamDat <- readRDS("../data/firstBatch_Robjects/MamGlandData_QCnormclustered.rds")
 m2 <- mamDat[["counts"]]
 pD2 <- mamDat[["phenoData"]]
 rm(mamDat)

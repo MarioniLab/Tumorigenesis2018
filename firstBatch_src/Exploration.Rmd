@@ -28,8 +28,8 @@ library(gridExtra)
 source("functions.R")
 
 # Load Data
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 pD <- left_join(pD,sfs)
@@ -78,7 +78,7 @@ I compared the fraction of EpCam+ cells between FACS and scRNA-seq data to see i
 ```{r, message=FALSE, warning=FALSE}
 facs <- read.csv("../data/misc/FACS_data.csv")
 colnames(facs)[1] <- "Condition"
-anno_full <- read.csv("../data/Robjects/Cluster_final.csv")
+anno_full <- read.csv("../data/firstBatch_Robjects/Cluster_final.csv")
 pD.sub <- left_join(anno_full,pD)
 pD.sub$Class <- ifelse(pD.sub$ClusterLabels %in% c("C4","C12","C19","C14"),"Epithelial","Non-Epi")
 summ <- group_by(pD.sub, Condition) %>% 
@@ -183,7 +183,7 @@ Each tSNE represents cells from one animal, and is colored by the two replicates
 conds <- unique(pD$Condition[pD$AnimalHadTumor==FALSE])
 pltlist <- list()
 for (cond in conds) {
-    tsn <- read.csv(paste0("../data/Robjects/tSNE_",cond,"_raw.csv"))
+    tsn <- read.csv(paste0("../data/firstBatch_Robjects/tSNE_",cond,"_raw.csv"))
     pD.sub <- right_join(pD,tsn)
     pD.sub <- arrange(pD.sub, prcntMito)
     pltlist[[cond]] <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=SampleID)) +
@@ -206,7 +206,7 @@ conds <- list("38","41","46","53")
 pltlist <- list()
 for (cond in conds) {
     cond <- paste(cond,collapse="-")
-    tsn <- read.csv(paste0("../data/Robjects/tSNE_",cond,"_raw.csv"))
+    tsn <- read.csv(paste0("../data/firstBatch_Robjects/tSNE_",cond,"_raw.csv"))
     pD.sub <- right_join(pD,tsn)
     pD.sub <- arrange(pD.sub, prcntMito)
     pltlist[[cond]] <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Condition)) +
@@ -228,7 +228,7 @@ conds <- list(c("38","41"),
 pltlist <- list()
 for (cond in conds) {
     cond <- paste(cond,collapse="-")
-    tsn <- read.csv(paste0("../data/Robjects/tSNE_",cond,"_raw.csv"))
+    tsn <- read.csv(paste0("../data/firstBatch_Robjects/tSNE_",cond,"_raw.csv"))
     pD.sub <- right_join(pD,tsn)
     pD.sub <- arrange(pD.sub, prcntMito)
     pltlist[[cond]] <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Condition)) +
@@ -249,9 +249,9 @@ Some Clusters will need a bit more work in order to be fully identified, but for
 
 ## 17 Clusters representing various cell types
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
-tsn <- read.csv("../data/Robjects/tSNE_nontumor_raw.csv")
+tsn <- read.csv("../data/firstBatch_Robjects/tSNE_nontumor_raw.csv")
 pD.sub <- right_join(pD,tsn)
-anno <- read.csv("../data/Robjects/CellTypes.csv")
+anno <- read.csv("../data/firstBatch_Robjects/CellTypes.csv")
 pD.sub <- right_join(pD.sub,anno)
 
 p0 <- ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Cluster)) +
@@ -314,7 +314,7 @@ Not sure how valid it is to derive this conclusion from the tSNE but it also sup
 Might be something worth investigating in more depth.
 Otherwise, the BRCA1 animals appear to have a cluster of T-cells that is (almost) not present in the wild type animals.
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
-substructure <- read.csv("../data/Robjects/Substructure.csv")
+substructure <- read.csv("../data/firstBatch_Robjects/Substructure.csv")
 substructure <- substructure[,c("barcode","Cluster","Class","tSNE2","tSNE1")]
 pD.sub <- right_join(pD,substructure)
 
@@ -348,7 +348,7 @@ p2
 In order to further look at potential transitions between the various epithelial clusters I computed diffusion map of the epithelium form all samples excluding the tumor.
 Cells were downsampled to the number of cells from the age with the fewest cells.
 ```{r, fig.width=8, fig.height=8, warning=FALSE, message=FALSE}
-dms <- read.csv("../data/Robjects/DiffusionMap.csv")
+dms <- read.csv("../data/firstBatch_Robjects/DiffusionMap.csv")
 epi <- right_join(epi,dms)
 epi$Cluster <- as.character(epi$Cluster)
 epi$Cluster <- mapvalues(epi$Cluster,c("C10","C16","C8"),
@@ -381,9 +381,9 @@ It might be worth trying to a second round of clustering per celltype to resolve
 ## Comparison of Clustering
 Rows are the new clusters, columns the old.
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
-anno <- read.csv("../data/Robjects/CellTypes.csv")[,-1]
+anno <- read.csv("../data/firstBatch_Robjects/CellTypes.csv")[,-1]
 pD.sub <- left_join(pD,anno)
-anno_full <- read.csv("../data/Robjects/Cluster_all.csv")[,-1]
+anno_full <- read.csv("../data/firstBatch_Robjects/Cluster_all.csv")[,-1]
 colnames(anno_full)[2] <- "Cluster_Full"
 colnames(anno_full)[3] <- "Class_Full"
 pD.sub <- left_join(pD.sub,anno_full)
@@ -397,7 +397,7 @@ kable(table(pD.sub$Class,pD.sub$Class_Full,useNA="always"))
 ## tSNEs
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
 # pD.sub <- pD.sub[,-c(18,19)]
-tsn <- read.csv("../data/Robjects/tSNE_38-41-46-53_raw.csv")
+tsn <- read.csv("../data/firstBatch_Robjects/tSNE_38-41-46-53_raw.csv")
 pD.sub <- left_join(pD.sub,tsn)
 ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Cluster_Full)) +
     geom_point() +
@@ -411,7 +411,7 @@ ggplot(pD.sub, aes(x=tSNE1, y=tSNE2, color=Class_Full)) +
 
 ## UMAP
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
-umap <- read.csv("../data/Robjects/UMAP_all.csv")
+umap <- read.csv("../data/firstBatch_Robjects/UMAP_all.csv")
 pD.sub <- left_join(pD.sub,umap)
 ggplot(pD.sub, aes(x=UMAP1, y=UMAP2, color=Cluster_Full)) +
     geom_point() +
@@ -429,7 +429,7 @@ We can see what we saw earlier already, Lp-Luminal, Hs-Luminal and Basal, with p
 In addition we can also see a few transitions between Lp-Luminal and the tumor. 
 It is interesting that these are between Lp-Luminal and the tumor and not to any other compartment. 
 ```{r, fig.width=12, fig.height=12, warning=FALSE, message=FALSE}
-dms <- read.csv("../data/Robjects/DiffusionMap_Epithelium.csv")
+dms <- read.csv("../data/firstBatch_Robjects/DiffusionMap_Epithelium.csv")
 pD.sub <- right_join(pD,dms)
 pD.sub <- left_join(pD.sub, anno_full)
 pD.sub$Cluster_Full <- as.character(pD.sub$Cluster_Full)

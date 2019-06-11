@@ -28,16 +28,16 @@ library(pheatmap)
 library(irlba)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 pD <- left_join(pD,sfs)
 fD <- dataList[["featureData"]]
 rm(dataList)
 
-umap <- read.csv("../data/Robjects/UMAP_all.csv")
-anno <- read.csv("../data/Robjects/Cluster_final.csv")[,-1]
+umap <- read.csv("../data/firstBatch_Robjects/UMAP_all.csv")
+anno <- read.csv("../data/firstBatch_Robjects/Cluster_final.csv")[,-1]
 pD <- right_join(pD,umap)
 pD <- left_join(pD,anno)
 
@@ -1220,5 +1220,5 @@ ggplot(test, aes(x=UMAP1, y=UMAP2, color=CellType)) +
     geom_point() +
     scale_color_manual(values=levels(pD$Colors)) 
 res <- pD[,c("barcode","FinalCluster","CellType","MajorGroups","Groups","Colors")]
-write.csv(res,"../data/Robjects/CellTypes.csv")
+write.csv(res,"../data/firstBatch_Robjects/CellTypes.csv")
 ```

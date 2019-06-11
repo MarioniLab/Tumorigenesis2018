@@ -6,8 +6,8 @@ library(umap)
 library(scran)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 # dataList <- subSample(dataList,cell.number=10000)
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
@@ -31,4 +31,4 @@ ump <- umap(as.matrix(t(m[hvg,])), min_dist=0.5, metric="pearson", random_state=
 pD$UMAP1 <- ump$layout[,1]
 pD$UMAP2 <- ump$layout[,2]
 
-write.csv(pD[,c("barcode","UMAP1","UMAP2")],file="../data/Robjects/UMAP_all.csv")
+write.csv(pD[,c("barcode","UMAP1","UMAP2")],file="../data/firstBatch_Robjects/UMAP_all.csv")

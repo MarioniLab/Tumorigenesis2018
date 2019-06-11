@@ -6,7 +6,7 @@ library(reshape2)
 # ---- ReadData ----
 
 # Read in output dropletUtils package
-cDat <- readRDS("../data/Robjects/CountMatrix.rds")
+cDat <- readRDS("../data/firstBatch_Robjects/CountMatrix.rds")
 pDat <- data.frame(barcode=colnames(cDat))
 fDat <- read.table("../data/CellRangerData/SampleA12/outs/filtered_gene_bc_matrices/mm10/genes.tsv",stringsAsFactors=FALSE)
 colnames(fDat) <- c("id","symbol")
@@ -65,4 +65,4 @@ fDat$KeepForHvg <- !(fDat$Ribosomal | fDat$Mitochondrial)
 # Save data
 stopifnot(identical(rownames(fDat),as.character(rownames(cDat))) & identical(colnames(cDat),pDat$barcode))
 DataList <- list("phenoData"=pDat, "featureData"=fDat, "counts"=cDat)
-saveRDS(DataList,file="../data/Robjects/ExpressionList.rds")
+saveRDS(DataList,file="../data/firstBatch_Robjects/ExpressionList.rds")

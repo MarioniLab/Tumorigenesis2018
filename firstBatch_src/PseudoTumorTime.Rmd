@@ -31,17 +31,17 @@ library(viridis)
 library(reshape2)
 source("functions.R")
 
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 pD <- left_join(pD,sfs)
 fD <- dataList[["featureData"]]
 rm(dataList)
 
-tsn <- read.csv("../data/Robjects/tSNE_38-41-46-53_raw.csv")
-umap <- read.csv("../data/Robjects/UMAP_all.csv",row.names=1)
-anno <- read.csv("../data/Robjects/Cluster_final.csv")[,-1]
+tsn <- read.csv("../data/firstBatch_Robjects/tSNE_38-41-46-53_raw.csv")
+umap <- read.csv("../data/firstBatch_Robjects/UMAP_all.csv",row.names=1)
+anno <- read.csv("../data/firstBatch_Robjects/Cluster_final.csv")[,-1]
 pD <- right_join(pD,tsn)
 pD <- left_join(pD,anno)
 pD <- left_join(pD,umap)

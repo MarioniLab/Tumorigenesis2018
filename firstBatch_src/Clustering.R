@@ -13,13 +13,13 @@ source("functions.R")
 
 
 # Load Data
-dataList <- readRDS("../data/Robjects/ExpressionList_QC.rds")
+dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 # dataList <- subSample(dataList,cell.number=10000)
 m.full <- dataList[["counts"]]
 pD.full <- dataList[["phenoData"]]
 fD.full <- dataList[["featureData"]]
 rm(dataList)
-sfs <- read.csv("../data/Robjects/SizeFactors.csv")
+sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
 rownames(m.full) <- as.vector(rownames(m.full))
 
 # Gene and cell filtering
@@ -49,5 +49,5 @@ pD$Cluster <- clusts
 
 # Save
 anno <- pD[,c("barcode","Cluster")]
-write.csv(file="../data/Robjects/Cluster_all.csv",anno)
+write.csv(file="../data/firstBatch_Robjects/Cluster_all.csv",anno)
 
