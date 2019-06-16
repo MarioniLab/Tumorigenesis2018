@@ -1,0 +1,238 @@
+---
+title: "Tumorigenesis Quality Control"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+
+# Load Data
+- This file contains the quality control for both batches of the tumorigenesis dataset
+```{r, message=FALSE}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(viridis)
+library(DT)
+# source("functions.R")
+
+# Load Data
+dataList <- readRDS("../data/combined_Robjects/ExpressionList.rds")
+m <- dataList[["counts"]]
+pD <- dataList[["phenoData"]]
+fD <- dataList[["featureData"]]
+rm(dataList)
+```
+
+# Overview
+
+- We have sequenced a total of `r length(unique(pD$Animal))` animals, of which we had `r sum(grepl("CBL",unique(pD$Animal)))` controls, `r length(unique(pD$Animal[pD$AnimalHadTumor]))` animals with tumors and `r length(unique(pD$Animal[!pD$AnimalHadTumor & !grepl("CBLA",pD$Animal)]))` WKBR animals pre-tumor.
+- We have sequenced animals of the following ages
+
+```{r, fig.widht=4,fig.height=4}
+pD$Batch <- as.factor(pD$Batch)
+pD$Genotype <- ifelse(grepl("WKBR",pD$Animal),"WKBR","CBLA")
+fP <- summarize(group_by(pD,Batch,Animal,Age,AnimalHadTumor,Genotype),n=n()) 
+ggplot(fP, aes(x=Genotype, y=as.numeric(Age))) +
+    geom_boxplot() +
+    geom_jitter(size=3,aes(color=AnimalHadTumor, shape=Batch)) +
+    scale_color_manual(values=c("red","blue")) +
+    ylab("Age (w)")
+```
+
+# Number of Cells
+- Not sure what happened to WKBR75.4bMG
+- Will need to see if that is still sensible
+- Note that the samples from the first batch were sequenced on two chips, hence the number of cells per lane is about half of what you see here. This will result in a low doublet rate.
+- We sequenced slightly less cells than expected, with a total of `r ncol(m)` cells.
+```{r,fig.width=4,fig.height=8}
+fP <- summarize(group_by(pD,Batch,Condition),n=n())
+ggplot(fP, aes(x=Condition, y=n)) +
+    geom_bar(stat="identity",fill="black") +
+    facet_wrap(~Batch,scales="free_x",nrow=2) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    xlab("") +
+    ylab("")
+```
+
+# Quality Control
+- The distribution for CBLA2 looks quite different, need to have a look at that one
+- Overall we did a good job at sequencing to comparable depths
+
+## Library Sizes
+```{r}
+# Sequencing Depth and Genes detected
+pD$UmiSums<- colSums(m)
+pD$GenesDetected <- colSums(m!=0)
+genesDetected <- ggplot(pD, aes(x=Condition,y=GenesDetected,fill=Batch)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of genes detected") +
+    ggtitle("Number of Genes detected") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+LibrarySize <- ggplot(pD, aes(x=Condition,y=UmiSums,fill=Batch)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of molecules") +
+    ggtitle("Number of Molecules") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+# Cell Viability
+mMito <- m[fD$Mitochondrial,]
+pD$prcntMito <- colSums(mMito)/colSums(m)
+cellViability <- ggplot(pD, aes(x=prcntMito, y=GenesDetected))+
+    geom_hex(bins=50) +
+    xlab("Percentage of mitochondrial reads") +
+    ggtitle("Cell Viability") +
+    facet_wrap(~Condition) +
+    scale_fill_viridis()
+rm(mMito)
+
+genesDetected
+LibrarySize
+```
+## Viability
+```{r,fig.width=10,fig.height=10}
+cellViability
+```
+
+## Relationship between UmiSums and GenesDetected
+
+- After the intial round of QC I noted that a population of cells that stood out (e.g. in UMAPs) that I could only identify by a substantial lower number of Genes detected for a certain sequencing depth.
+- I will flag and remove them here and will need to investigate later if they are enriched for any particular cell type.
+```{r}
+# Sequencing Depth and Genes detected
+gDLib <- ggplot(pD, aes(x=log10(UmiSums),y=log10(GenesDetected), color=Condition, shape=Batch)) +
+    geom_point() +
+    geom_smooth(aes(color=NULL)) +
+    ylab("Total number of genes detected") +
+    xlab("Total number of UMIs") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") 
+gDLib
+library(mgcv)
+pD$residDetectionTrend <- gam(log10(GenesDetected) ~ s(log10(UmiSums),bs="cr"),data=pD)$residuals
+```
+
+
+
+## Summary
+```{r}
+sumry <- group_by(pD, Condition) %>%
+    summarize("Number of cells"=n(),
+	      "Total molecules"=median(UmiSums),
+	      "Genes Detected"=median(GenesDetected))
+kable(sumry,caption="Summary of QC parameters as median")
+```
+
+# QC Filtering 
+## Cell-wise
+
+```{r}
+lib.outlier <- isOutlier(pD$UmiSums,nmads=3,type="both",log=TRUE)
+gd.outlier <- isOutlier(pD$GenesDetected,nmads=3,type="both",log=TRUE)
+mt.outlier <- isOutlier(pD$prcntMito,nmads=3,type="higher")
+trnd.outlier <- isOutlier(pD$residDetectionTrend,nmads=6,type="lower")
+
+pD$PassLibSize <- !lib.outlier
+pD$PassGenesDetected <- !gd.outlier
+pD$PassViability <- !mt.outlier
+pD$PassTrend <- !trnd.outlier
+pD$PassAll <- pD$PassLibSize & pD$PassGenesDetected & pD$PassViability & pD$PassTrend
+
+```
+
+The following filters were applied to remove low quality cells:
+
+- Library size (3 mads from median)
+- Number of Genes detected (3 mads from median)
+- Mitochondrial reads (3 mads from median)
+- In addition I added a filter on the gene detection trend (see above) which was defined as 6 mads from the median residuals of a cubic spline fit
+- Overall a relatively high number of cells is flagged with low viability `r sum(mt.outlier)` which is also due to the use of emptyDrops.
+- The thresholds are as follows :
+    - `r min(pD$UmiSums[!lib.outlier])` for UmiSums,
+    - `r min(pD$GenesDetected[!gd.outlier])` for genes detected
+    - `r max(pD$prcntMito[!mt.outlier])` for viability.
+
+```{r, fig.width=5, fig.height=5, fig.cap="Heatmap visualizing percentage of cells removed by filtering."}
+lsize <- t((table(pD$PassLibSize,pD$Condition)))
+lsize <- (lsize[,1]/lsize[,2])*100
+pdect <- t((table(pD$PassGenesDetected,pD$Condition)))
+pdect <- (pdect[,1]/pdect[,2])*100
+via <- t((table(pD$PassViability,pD$Condition)))
+via <- (via[,1]/via[,2])*100
+pall <- t((table(pD$PassAll,pD$Condition)))
+pall <- (pall[,1]/pall[,2])*100
+
+ovview <- data.frame("LibSize"=lsize,
+		     "GenesDetected"=pdect,
+		     "Viability"=via,
+		     "All"=pall)
+
+library(pheatmap)
+pheatmap(ovview,cluster_rows=FALSE,
+	 cluster_cols=FALSE)
+```
+
+```{r}
+kable(round(ovview,1))
+```
+
+## Gene-wise
+- Genes with a mean log expression lower that 0.01 are removed from the dataset.
+```{r}
+fD$keep <- rowMeans(m)>0.01 
+```
+
+## Final data 
+- We have data for `r nrow(m)` genes and `r ncol(m)` cells
+```{r}
+pD.pass <- pD[pD$PassAll,]
+genesDetected %+% pD.pass
+LibrarySize %+% pD.pass
+cellViability %+% pD.pass
+# Rename rows of m
+m <- as(m,"dgCMatrix")
+
+uniqnames <- uniquifyFeatureNames(fD$id,fD$symbol)
+uniqnames <- gsub("-",".",uniqnames)
+fD$uniqnames <- uniqnames
+rownames(m) <- uniqnames
+
+```
+
+## Normalization
+```{r}
+# I use the scater function as this preserves sparsity of the matrix during log transform
+sce <- SingleCellExperiment(assays=list(counts=m))
+library(BiocSingular)
+library(BiocParallel)
+clusters <- quickCluster(m, method="igraph", use.ranks=TRUE, d=50, BSPARAM=IrlbaParam(),BPPARAM=MulticoreParam(4))
+sce <- computeSumFactors(sce, clusters=clusters)
+plot(log10(sizeFactors(sce)),log10(pD$UmiSums),pch=19,xlab="Log(SizeFactors)",ylab="Log(LibrarySize)")
+
+sce <- normalize(sce)
+m <- logcounts(sce)
+
+out <- list()
+out[["counts"]] <- m
+out[["phenoData"]] <- pD
+out[["featureData"]] <- fD
+saveRDS(out,file="../data/combined_Robjects/ExpressionList_QC.rds")
+```
