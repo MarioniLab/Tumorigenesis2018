@@ -217,19 +217,8 @@ rownames(m) <- uniqnames
 
 ```
 
-## Normalization
+## Save Data
 ```{r}
-# I use the scater function as this preserves sparsity of the matrix during log transform
-sce <- SingleCellExperiment(assays=list(counts=m))
-library(BiocSingular)
-library(BiocParallel)
-clusters <- quickCluster(m, method="igraph", use.ranks=TRUE, d=50, BSPARAM=IrlbaParam(),BPPARAM=MulticoreParam(4))
-sce <- computeSumFactors(sce, clusters=clusters)
-plot(log10(sizeFactors(sce)),log10(pD$UmiSums),pch=19,xlab="Log(SizeFactors)",ylab="Log(LibrarySize)")
-
-sce <- normalize(sce)
-m <- logcounts(sce)
-
 out <- list()
 out[["counts"]] <- m
 out[["phenoData"]] <- pD
