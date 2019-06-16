@@ -116,7 +116,7 @@ cellViability
 
 - After the intial round of QC I noted that a population of cells that stood out (e.g. in UMAPs) that I could only identify by a substantial lower number of Genes detected for a certain sequencing depth.
 - I will flag and remove them here and will need to investigate later if they are enriched for any particular cell type.
-```{r}
+```{r, message=FALSE}
 # Sequencing Depth and Genes detected
 gDLib <- ggplot(pD, aes(x=log10(UmiSums),y=log10(GenesDetected), color=Condition, shape=Batch)) +
     geom_point() +
@@ -207,6 +207,7 @@ pD.pass <- pD[pD$PassAll,]
 genesDetected %+% pD.pass
 LibrarySize %+% pD.pass
 cellViability %+% pD.pass
+gDLib %+% pD.pass
 # Rename rows of m
 m <- as(m,"dgCMatrix")
 
