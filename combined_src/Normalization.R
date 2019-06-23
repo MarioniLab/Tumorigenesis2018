@@ -6,6 +6,7 @@ m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 
+sce <- SingleCellExperiment(assays=list(counts=m))
 clusters <- quickCluster(m, method="igraph", use.ranks=TRUE, d=50, BSPARAM=IrlbaParam(),BPPARAM=MulticoreParam(4))
 sce <- computeSumFactors(sce, clusters=clusters)
 plot(log10(sizeFactors(sce)),log10(pD$UmiSums),pch=19,xlab="Log(SizeFactors)",ylab="Log(LibrarySize)")
