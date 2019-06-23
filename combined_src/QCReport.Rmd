@@ -35,6 +35,11 @@ m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
 rm(dataList)
+
+# I will also shuffle the rows of pD and columns of m for plotting purpose and to prevent any funny effects from the ordering
+set.seed(300)
+pD <- pD[sample(nrow(pD)),]
+m <- m[,pD$barcode]
 ```
 
 # Overview
@@ -120,7 +125,7 @@ cellViability
 # Sequencing Depth and Genes detected
 gDLib <- ggplot(pD, aes(x=log10(UmiSums),y=log10(GenesDetected), color=Condition, shape=Batch)) +
     geom_point() +
-    geom_smooth(aes(color=NULL)) +
+    geom_smooth(aes(color=NULL, shape=NULL)) +
     ylab("Total number of genes detected") +
     xlab("Total number of UMIs") +
     theme_bw() +
@@ -197,25 +202,24 @@ kable(round(ovview,1))
 ## Gene-wise
 - Genes with a mean log expression lower that 0.01 are removed from the dataset.
 ```{r}
-fD$keep <- rowMeans(m)>0.01 
+keep <- rowMeans(m)>0.01 
 ```
 
 ## Final data 
 - We have data for `r nrow(m)` genes and `r ncol(m)` cells
 ```{r}
-pD.pass <- pD[pD$PassAll,]
-genesDetected %+% pD.pass
-LibrarySize %+% pD.pass
-cellViability %+% pD.pass
-gDLib %+% pD.pass
-# Rename rows of m
-m <- as(m,"dgCMatrix")
+pD <- pD[pD$PassAll,]
+m <- m[keep,pD$barcode]
+fD <- fD[keep,]
+genesDetected %+% pD
+LibrarySize %+% pD
+cellViability %+% pD
+gDLib %+% pD
 
 uniqnames <- uniquifyFeatureNames(fD$id,fD$symbol)
 uniqnames <- gsub("-",".",uniqnames)
 fD$uniqnames <- uniqnames
-rownames(m) <- uniqnames
-
+rownames(fD) <- rownames(m) <- uniqnames
 ```
 
 ## Save Data
