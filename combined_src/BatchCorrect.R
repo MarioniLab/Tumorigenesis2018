@@ -47,6 +47,7 @@ set.seed(300)
 
 mnncor <- batchelor::fastMNN(m2,m1,
 		     BPPARAM=param,
+		     k=10,
 		     BSPARAM=IrlbaParam(),
 		     cos.norm=FALSE, # because I did multiBatchNorm shouldn't be necessary
 		     subset.row=hvg)
