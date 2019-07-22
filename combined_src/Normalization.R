@@ -32,12 +32,21 @@ plot(log10(sizeFactors(sce2)),log10(colSums(m2)),pch=19,xlab="Log(SizeFactors)",
 sce <- batchelor::multiBatchNorm(sce1,sce2)
 
 # sce <- normalize(sce)
+sf1 <- sizeFactors(sce[[1]])
+sf2 <- sizeFactors(sce[[2]])
 m1.norm <- logcounts(sce[[1]])
 m2.norm <- logcounts(sce[[2]])
 
-m.norm <- cbind(m1.norm,m2.norm)
-m.norm <- m.norm[,pD$barcode]
+sfs <- c(sf1,sf2)
 
+m.norm <- cbind(m1.norm,m2.norm)
+names(sfs) <- colnames(m.norm)
+m.norm <- m.norm[,pD$barcode]
+sfs <- sfs[colnames(m.norm)]
+add <- data.frame("barcode"=names(sfs),
+		  "SizeFactor"=unname(sfs))
+
+pD <- dplyr::left_join(pD,add)
 out <- list()
 out[["counts"]] <- m.norm
 out[["phenoData"]] <- pD
