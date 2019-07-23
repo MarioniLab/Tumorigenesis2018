@@ -55,4 +55,5 @@ out <- bplapply(smps, function(smp) {
     out <- pD.sub[,c("barcode","Cluster","SubUMAP1","SubUMAP2","DbltScore")]
     return(out)
 },  BPPARAM=MulticoreParam())
+names(out) <- smps
 saveRDS(out,"backup.rds")
