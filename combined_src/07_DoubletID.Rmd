@@ -156,7 +156,7 @@ ggplot(outdf, aes(x=isDoublet,y=log10(UmiSums))) +
 - Next we will identify cells that are guilty-by-association by clustering the full dataset including the above identified doublet cells and find clusters with a high frequency of doublets
 ```{r, message=FALSE, warning=FALSE, cache=TRUE}
 # Read in BC PCA
-m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA_preDoublet.rds")
 igr <- buildSNNGraph(m.cor,d=NA, transposed=TRUE)
 # Overcluster
 cl <- igraph::cluster_walktrap(igr,steps=2)
@@ -183,7 +183,7 @@ ggplot(smry, aes(x=fullCluster, y=Prop, fill=isDoublet)) +
     geom_hline(yintercept=1-thrsld) +
     scale_fill_manual(values=c("black","red"))
 
-ump <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",row.names=1)
+ump <- read.csv("../data/combined_Robjects/UMAP_corrected_preDoublet.csv",row.names=1)
 outdf <- left_join(outdf,ump)
 
 ggplot(outdf, aes(x=UMAP1, y=UMAP2, color=outdf$fullCluster %in% dblClusters)) +
@@ -247,7 +247,6 @@ ggplot(smry, aes(x=medUmi,y=medprcntMito)) +
 - I did label cells as "potentially damaged" and will keep that information for further analyses
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-m <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")[["counts"]]
 cls <- smry[smry$medprcntMito<0.005,"sampClust"]
 smps.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) x[1]))
 cls.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) x[2]))

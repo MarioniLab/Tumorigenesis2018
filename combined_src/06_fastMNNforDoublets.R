@@ -5,13 +5,15 @@ library(Matrix)
 library(cowplot)
 library(dplyr)
 library(batchelor)
+library(umap)
+library(igraph)
 library(BiocParallel)
 library(BiocSingular)
 source("functions.R")
 
 # Read in Data
 dataList <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")
-# dataList <- subSample(dataList,cell.number=30000)
+dataList <- subSample(dataList,cell.number=30000)
 		      
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
@@ -52,8 +54,14 @@ mnncor <- batchelor::fastMNN(m2,m1,
 		     cos.norm=FALSE, # because I did multiBatchNorm shouldn't be necessary
 		     subset.row=hvg)
 
-# After correction
+# Save BC PCA
 out.final <- reducedDim(mnncor)
 out.final <- out.final[pD$barcode,] # reorder
-saveRDS(out.final,"../data/combined_Robjects/CorrectedPCA.rds")
-saveRDS(mnncor,"../data/combined_Robjects/FullMNN.rds")
+
+# Compute UMAP for whole dataste
+ump <- umap(out.final, min_dist=0.5, metric="pearson", random_state=42)
+pD$UMAP1 <- ump$layout[,1]
+pD$UMAP2 <- ump$layout[,2]
+
+saveRDS(out.final,"../data/combined_Robjects/CorrectedPCA_preDoublet.rds")
+write.csv(pD[,c("barcode","UMAP1","UMAP2")],file="../data/combined_Robjects/UMAP_corrected_preDoublet.csv")
