@@ -17,7 +17,7 @@ In this document I will further clean up the data and remove cells that most lik
 
 
 # Removal of doublets
-The following strategy for doubled removal was employed, mainly following an approach from \textit{Pijuana-Sala, Griffiths and Guibentif et al.}.
+The following strategy for doubled removal was employed, mainly following an approach from __Pijuana-Sala, Griffiths and Guibentif et al.__
 
 1. Estimate probability of cell being a doublet per sample using doubletCells from scran.
 2. Compute per sample clusters based on all genes based on a SNNGraph (k=10) and walktrap for community detection (steps=2).
@@ -272,7 +272,7 @@ dmgd <- outdf$barcode[outdf$sampClust %in% cls]
 outdf$isPotDamaged <- outdf$barcode %in% dmgd
 ```
 
-- Further I exclude two cluster that show expression of hemoglobin
+- Further I exclude clusters that show expression of hemoglobin
 ```{r, message=FALSE, warning=FALSE}
 library(ggrepel)
 ggplot(smry, aes(x=sampClust,y=medHb)) +
