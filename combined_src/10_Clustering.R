@@ -116,7 +116,7 @@ compCluster <-  function(pcs, cluster, m, ...) {
 	cs <- paste0(cluster,"S", finalSubclusters)
 
 	out <- data.frame("barcode"=rownames(pcs),
-			  "SubCluster"=cs,
+			  "Cluster"=cs,
 			  "SCID"=finalSubclusters,
 			  "UnmergedID"=subclusters,
 			  "SubUMAP1"=umap1,
