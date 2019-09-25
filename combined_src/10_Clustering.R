@@ -13,6 +13,7 @@ rownames(pD) <- pD$barcode
 rm(dataList)
 ump <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)
 pD <- pD[ump$barcode,] # this ensure the right order and cells for the umap graph below
+m <- m[,pD$barcode]
 
 # ---- First Round -----
 # Clustering with walktrap on the UMAP graph
@@ -23,10 +24,7 @@ cl.cor <- cluster_walktrap(igr.cor,steps=3)
 pD$Cluster <- as.factor(paste0("C",cl.cor$membership))
 write.csv(file="../data/combined_Robjects/Clusters.csv",pD[,c("barcode","Cluster")])
 
-# Load Data
-cor.pca <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
-cor.pca <- cor.pca[pD$barcode,]
-rownames(pD) <- pD$barcode
+## Subclustering clusters
 
 mergeCluster <- function(x, clusters, min.DE=20, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
 {
@@ -116,6 +114,7 @@ compCluster <-  function(pcs, cluster, m, ...) {
 	cs <- paste0(cluster,"S", finalSubclusters)
 
 	out <- data.frame("barcode"=rownames(pcs),
+			  "MajorCluster"=cluster,
 			  "Cluster"=cs,
 			  "SCID"=finalSubclusters,
 			  "UnmergedID"=subclusters,
@@ -123,6 +122,13 @@ compCluster <-  function(pcs, cluster, m, ...) {
 			  "SubUMAP2"=umap2)
 	return(out)
 }
+
+
+
+# Load Data
+cor.pca <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+cor.pca <- cor.pca[pD$barcode,]
+rownames(pD) <- pD$barcode
 
 clusts <- unique(pD$Cluster)
 ## remove later
@@ -136,4 +142,6 @@ out <- bplapply(clusts, function(cl) {
 			  }, BPPARAM=MulticoreParam())
 
 out.tbl <- do.call(rbind,out)
+out.tbl$Cluster <- as.character(out.tbl$Cluster)
+out.tbl$Cluster <- factor(out.tbl$Cluster,levels=gtools::mixedsort(unique(out.tbl$Cluster)))
 write.csv(file="../data/combined_Robjects/SubClusters.csv",out.tbl)
