@@ -29,7 +29,7 @@ hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
 hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
 
 # UMAP
-ump <- umap(as.matrix(t(m[hvg,])), min_dist=0.5, metric="pearson", random_state=42)
+ump <- umap(as.matrix(t(m[hvg,])), random_state=42)
 pD$UMAP1Uncor <- ump$layout[,1]
 pD$UMAP2Uncor <- ump$layout[,2]
 
@@ -47,7 +47,7 @@ igr.uncor <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRU
 # ---- After Correction -----
 m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[pD$barcode,]
-ump <- umap(m.cor, min_dist=0.5, metric="pearson", random_state=42)
+ump <- umap(m.cor, random_state=42)
 pD$UMAP1 <- ump$layout[,1]
 pD$UMAP2 <- ump$layout[,2]
 

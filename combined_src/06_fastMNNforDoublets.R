@@ -58,7 +58,7 @@ out.final <- reducedDim(mnncor)
 out.final <- out.final[pD$barcode,] # reorder
 
 # Compute UMAP for whole dataste
-ump <- umap(out.final, min_dist=0.5, metric="pearson", random_state=42)
+ump <- umap(out.final, random_state=42)
 pD$UMAP1 <- ump$layout[,1]
 pD$UMAP2 <- ump$layout[,2]
 

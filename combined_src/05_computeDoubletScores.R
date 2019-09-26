@@ -47,7 +47,7 @@ out <- bplapply(smps, function(smp) {
     hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
     hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
 
-    ump <- umap(as.matrix(t(m.sub[hvg,])), min_dist=0.5, metric="pearson", random_state=42)
+    ump <- umap(as.matrix(t(m.sub[hvg,])), random_state=42)
     pD.sub$SubUMAP1 <- ump$layout[,1]
     pD.sub$SubUMAP2 <- ump$layout[,2]
     pD.sub$DbltScore <- scrs

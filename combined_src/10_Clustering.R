@@ -84,7 +84,7 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=30, removeGenes=NULL, me
 
 compCluster <-  function(pcs, cluster, m, ...) {
 
-	ump <- umap(pcs, min_dist=0.5, metric="pearson", random_state=42)
+	ump <- umap(pcs, random_state=42)
 	umap1 <- ump$layout[,1]
 	umap2 <- ump$layout[,2]
 
