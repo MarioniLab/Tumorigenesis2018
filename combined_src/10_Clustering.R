@@ -20,7 +20,7 @@ m <- m[,pD$barcode]
 umapgraph <- readRDS("../data/combined_Robjects/UMAP_graphs.rds")
 igr.cor <- umapgraph[["Corrected"]]
 set.seed(42)
-cl.cor <- cluster_walktrap(igr.cor,3)
+cl.cor <- cluster_walktrap(igr.cor,steps=3)
 pD$Cluster <- as.factor(paste0("C",cl.cor$membership))
 write.csv(file="../data/combined_Robjects/Clusters.csv",pD[,c("barcode","Cluster")])
 
