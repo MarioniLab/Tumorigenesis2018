@@ -20,13 +20,13 @@ m <- m[,pD$barcode]
 umapgraph <- readRDS("../data/combined_Robjects/UMAP_graphs.rds")
 igr.cor <- umapgraph[["Corrected"]]
 set.seed(42)
-cl.cor <- cluster_walktrap(igr.cor,steps=3)
+cl.cor <- cluster_walktrap(igr.cor,3)
 pD$Cluster <- as.factor(paste0("C",cl.cor$membership))
 write.csv(file="../data/combined_Robjects/Clusters.csv",pD[,c("barcode","Cluster")])
 
 ## Subclustering clusters
 
-mergeCluster <- function(x, clusters, min.DE=20, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
+mergeCluster <- function(x, clusters, min.DE=10, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
 {
     library(scran)
     counter <- c(1:maxRep)
@@ -57,6 +57,8 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=30, removeGenes=NULL, me
 
 	if (merge) {
 	#Compute new groups
+	if (any(is.na(out))) { print("A test did not have enough D.F.") }
+	out[is.na(out)] <- min.DE+1 # This is to prevent hclust from crashing, NAs are produced when their are not enough d.f. for testing. In this case I do not wnat the clusters to be merged because I formally cant test for DE.
 	hc <- hclust(as.dist(out))
 	min.height <- min(hc$height)
 	if (min.height <= min.DE) {
@@ -84,42 +86,53 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=30, removeGenes=NULL, me
 
 compCluster <-  function(pcs, cluster, m, ...) {
 
-	ump <- umap(pcs, random_state=42)
-	umap1 <- ump$layout[,1]
-	umap2 <- ump$layout[,2]
-
-	indx.knn <- ump$knn[["indexes"]]
-	m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
-	rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
-
-	for (i in seq_len(nrow(m.adj))) {
-	    m.adj[i,rownames(indx.knn)[indx.knn[i,]]] <- 1
-	}
-
-	igr <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRUE)
-
-	set.seed(42)
-	wktrp <- cluster_walktrap(igr, steps=4)
-	subclusters <- wktrp$membership
-
-	# Merging step
-	if (length(unique(subclusters))>1) {
-	    mrg <- mergeCluster(m, subclusters, ...)
-	    finalSubclusters <- as.character(mrg$NewCluster)
-	    finalSubclusters <- plyr::mapvalues(finalSubclusters,unique(finalSubclusters),c(1:length(unique(finalSubclusters))))
+	if (nrow(pcs)<100) {
+	    out <- data.frame("barcode"=rownames(pcs),
+			      "MajorCluster"=cluster,
+			      "Cluster"=cluster,
+			      "SCID"=1,
+			      "UnmergedID"=1,
+			      "SubUMAP1"=NA,
+			      "SubUMAP2"=NA)
 	} else {
-	    finalSubclusters <- subclusters
+
+	    ump <- umap(pcs, random_state=42)
+	    umap1 <- ump$layout[,1]
+	    umap2 <- ump$layout[,2]
+
+	    indx.knn <- ump$knn[["indexes"]]
+	    m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
+	    rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
+
+	    for (i in seq_len(nrow(m.adj))) {
+		m.adj[i,rownames(indx.knn)[indx.knn[i,]]] <- 1
+	    }
+
+	    igr <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRUE)
+
+	    set.seed(42)
+	    wktrp <- cluster_walktrap(igr)
+	    subclusters <- wktrp$membership
+
+	    # Merging step
+	    if (length(unique(subclusters))>1) {
+		mrg <- mergeCluster(m, subclusters, ...)
+		finalSubclusters <- as.character(mrg$NewCluster)
+		finalSubclusters <- plyr::mapvalues(finalSubclusters,unique(finalSubclusters),c(1:length(unique(finalSubclusters))))
+	    } else {
+		finalSubclusters <- subclusters
+	    }
+
+	    cs <- paste0(cluster,"S", finalSubclusters)
+
+	    out <- data.frame("barcode"=rownames(pcs),
+			      "MajorCluster"=cluster,
+			      "Cluster"=cs,
+			      "SCID"=finalSubclusters,
+			      "UnmergedID"=subclusters,
+			      "SubUMAP1"=umap1,
+			      "SubUMAP2"=umap2)
 	}
-
-	cs <- paste0(cluster,"S", finalSubclusters)
-
-	out <- data.frame("barcode"=rownames(pcs),
-			  "MajorCluster"=cluster,
-			  "Cluster"=cs,
-			  "SCID"=finalSubclusters,
-			  "UnmergedID"=subclusters,
-			  "SubUMAP1"=umap1,
-			  "SubUMAP2"=umap2)
 	return(out)
 }
 
@@ -130,16 +143,17 @@ cor.pca <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
 cor.pca <- cor.pca[pD$barcode,]
 rownames(pD) <- pD$barcode
 
-clusts <- unique(pD$Cluster)
+clusts <- as.character(unique(pD$Cluster))
 ## remove later
 out <- bplapply(clusts, function(cl) {
+	     print(cl)
 	     cells <- pD$barcode[pD$Cluster==cl]
 	     pD.sub <- pD[cells,]
 	     cor.pca.sub <- cor.pca[cells,]
 	     m.sub <- m[,cells]
 	     out <- compCluster(cor.pca.sub, cluster=cl, m=m.sub, block=pD.sub$Batch)
 	     return(out)
-			  }, BPPARAM=MulticoreParam())
+			  }, BPPARAM=MulticoreParam(4))
 
 out.tbl <- do.call(rbind,out)
 out.tbl$Cluster <- as.character(out.tbl$Cluster)
