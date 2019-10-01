@@ -33,16 +33,7 @@ ump <- umap(as.matrix(t(m[hvg,])), random_state=42)
 pD$UMAP1Uncor <- ump$layout[,1]
 pD$UMAP2Uncor <- ump$layout[,2]
 
-#Convert to adj matrix for clustering if desired
-indx.knn <- ump$knn[["indexes"]]
-m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
-rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
-
-for (i in seq_len(nrow(m.adj))) {
-    m.adj[i,rownames(indx.knn)[indx.knn[i,]]] <- 1
-}
-
-igr.uncor <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRUE)
+igr.uncor <- get_umap_graph(ump)
 
 # ---- After Correction -----
 m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
@@ -51,16 +42,7 @@ ump <- umap(m.cor, random_state=42)
 pD$UMAP1 <- ump$layout[,1]
 pD$UMAP2 <- ump$layout[,2]
 
-#Convert to adj matrix for clustering if desired
-indx.knn <- ump$knn[["indexes"]]
-m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
-rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
-
-for (i in seq_len(nrow(m.adj))) {
-    m.adj[i,rownames(indx.knn)[indx.knn[i,]]] <- 1
-}
-
-igr.cor <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRUE)
+igr.cor <- get_umap_graph(ump)
 
 
 out <- list("Corrected"=igr.cor,

@@ -100,15 +100,7 @@ compCluster <-  function(pcs, cluster, m, ...) {
 	    umap1 <- ump$layout[,1]
 	    umap2 <- ump$layout[,2]
 
-	    indx.knn <- ump$knn[["indexes"]]
-	    m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
-	    rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
-
-	    for (i in seq_len(nrow(m.adj))) {
-		m.adj[i,rownames(indx.knn)[indx.knn[i,]]] <- 1
-	    }
-
-	    igr <- graph_from_adjacency_matrix(m.adj, mode="undirected")#,weighted=TRUE)
+	    igr <- get_umap_graph(ump)
 
 	    set.seed(42)
 	    wktrp <- cluster_walktrap(igr)
