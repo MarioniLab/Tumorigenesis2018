@@ -26,8 +26,9 @@ library(Rtsne)
 library(cowplot)
 library(Matrix)
 library(viridis)
+library(wesanderson)
 library(DT)
-# source("functions.R")
+source("functions.R")
 
 # Load Data
 dataList <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")
@@ -38,138 +39,98 @@ fD <- dataList[["featureData"]]
 rm(dataList)
 
 ump <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",row.names=1,stringsAsFactor=FALSE)
-```
-
-## Outliers prior to correction
-- There are some obvious outlier in the UMAP prior to correction
-- No association to any particular sample
-- Appear to have low values for most QC parameters, however nothing I could threshold on
-- I will flag them at this stage and will decide later on whether on not they have to be removed
-```{r, message=FALSE}
 pD <- pD[ump$barcode,]
 pD <- left_join(pD,ump)
-p <- ggplot(pD, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=Batch)) +
-    geom_point(pch=21,size=0.9)  +
-    scale_fill_brewer(palette="Set1")
-p
-pD$PreCorrectionOutlier <- ifelse(pD$UMAP2Uncor>25,"Yes","No")
-p0 <- ggplot(pD, aes(y=log10(UmiSums), x=PreCorrectionOutlier)) +
-	     geom_boxplot()
-p1 <- ggplot(pD, aes(y=log10(GenesDetected), x=PreCorrectionOutlier)) +
-	     geom_boxplot()
-p2 <- ggplot(pD, aes(y=prcntMito, x=PreCorrectionOutlier)) +
-	     geom_boxplot()
-plot_grid(p0,p1,p2,nrow=1)
 ```
 
 ## Comparison to correction
-- For visualization purposes I do remove the outliers
 - The data after batch correction looks better, however the different populations appear closer to each other?
 ```{r, message=FALSE, fig.width=10, fig.height=5}
-pD.so <- pD[pD$PreCorrectionOutlier=="No",]
-p0 <- ggplot(pD.so, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=Batch)) +
+p0 <- ggplot(pD, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=Batch)) +
     geom_point(pch=21,size=0.9)  +
     scale_fill_brewer(palette="Set1")
-p1 <- ggplot(pD.so, aes(x=UMAP1, y=UMAP2,fill=Batch)) +
+p1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2,fill=Batch)) +
     geom_point(pch=21,size=0.9) +
     scale_fill_brewer(palette="Set1")
 plot_grid(p0,p1)
 
-pD.so.sub <- pD.so[pD.so$Condition %in% c("CBLA0","CBLA1","CBLA2"),]
-p0 <- ggplot(pD.so.sub, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=Batch)) +
+pD.sub <- pD[pD$Condition %in% c("CBLT","CBLA1","CBLA2"),]
+p0 <- ggplot(pD.sub, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=Batch)) +
     geom_point(pch=21,size=0.8)  +
     scale_fill_brewer(palette="Set1") +
     ggtitle("Only CBLA")
-p1 <- ggplot(pD.so.sub, aes(x=UMAP1, y=UMAP2,fill=Batch)) +
+p1 <- ggplot(pD.sub, aes(x=UMAP1, y=UMAP2,fill=Batch)) +
     geom_point(pch=21,size=0.8) +
     scale_fill_brewer(palette="Set1") +
     ggtitle("Only CBLA")
 plot_grid(p0,p1)
 ```
 
-## Preliminary clustering
-```{r, message=FALSE, fig.width=10, fig.height=5, cache=TRUE}
-library(igraph)
-umapgraph <- readRDS("../data/combined_Robjects/UMAP_graphs.rds")
-igr.cor <- umapgraph[["Corrected"]]
-igr.uncor <- umapgraph[["Uncorrected"]]
-cl.cor <- cluster_walktrap(igr.cor,steps=3)
-pD$CorCluster <- as.factor(cl.cor$membership)
-cl.uncor <- cluster_walktrap(igr.uncor,steps=3)
-pD$UncorCluster <- as.factor(cl.uncor$membership)
+## Clustering
+```{r, message=FALSE, fig.width=12, fig.height=12}
+anno <- read.csv("../data/combined_Robjects/SubClusters.csv",stringsAsFactors=FALSE)[,-1]
+pD <- left_join(pD,anno)
+pD$Cluster <- factor(pD$Cluster)
+pD$SCID <- factor(pD$SCID)
+pD$UnmergedID <- factor(pD$UnmergedID)
+pD$MajorCluster <- factor(pD$MajorCluster)
 
-pD <- left_join(pD,ump)
-pD.so <- pD[pD$PreCorrectionOutlier=="No",]
-p0 <- ggplot(pD.so, aes(x=UMAP1Uncor, y=UMAP2Uncor, fill=UncorCluster)) +
-    geom_point(pch=21)  
-p1 <- ggplot(pD.so, aes(x=UMAP1, y=UMAP2,fill=CorCluster)) +
-    geom_point(pch=21) 
-plot_grid(p0,p1)
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Cluster)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    theme_void() +
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD$Cluster)),type="continuous")) +
+    facet_wrap(~MajorCluster)
+```
 
-p0 <- group_by(pD, UncorCluster, Batch) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() %>%
-    ggplot(., aes(x=UncorCluster,y=frac, fill=Batch)) +
-    geom_bar(stat="identity") 
-
-p1 <- group_by(pD, CorCluster, Batch) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() %>%
-    ggplot(., aes(x=CorCluster,y=frac, fill=Batch)) +
-    geom_bar(stat="identity") 
-
-plot_grid(p0,p1)
-
-pD.sub <- pD[pD$Condition %in% c("CBLA0","CBLA1","CBLA2"),]
-p0 <- group_by(pD.sub, UncorCluster, Batch) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() %>%
-    ggplot(., aes(x=UncorCluster,y=frac, fill=Batch)) +
-    geom_bar(stat="identity") 
-
-p1 <- group_by(pD.sub, CorCluster, Batch) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() %>%
-    ggplot(., aes(x=CorCluster,y=frac, fill=Batch)) +
-    geom_bar(stat="identity") 
-
-plot_grid(p0,p1)
+## Clustering
+- I subclustered clusters with more than 100 cells, while requiring at least 15 DE genes between the subclusters
+- This appears to resolve some further strucutres for some of the clusters
+```{r, message=FALSE, fig.width=14, fig.height=14}
+pD.sub <- pD[!is.na(pD$SubUMAP1),]
+ggplot(pD.sub, aes(x=SubUMAP1, y=SubUMAP2, color=UnmergedID)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    facet_wrap(~MajorCluster,scales="free") +
+    theme_void() +
+    ggtitle("Unmerged Clusters")
+ggplot(pD.sub, aes(x=SubUMAP1, y=SubUMAP2, color=SCID)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    facet_wrap(~MajorCluster,scales="free") +
+    theme_void() +
+    ggtitle("After merging Clusters w less than 15DE")
 ```
 
 ## Comparison to previous cell types
 - There is a fairly good overlap with previously identified celltypes
-```{r, message=FALSE, fig.width=10, fig.height=5}
+```{r, message=FALSE, fig.width=7, fig.height=7}
 celltypes <- read.csv("../data/firstBatch_Robjects/CellTypes.csv",stringsAsFactors=FALSE)
 pD <- left_join(pD,celltypes[,c("barcode","CellType","MajorGroups","Groups")])
 pD$CellType[is.na(pD$CellType)] <- "Undetermined"
 pD$MajorGroups[is.na(pD$MajorGroups)] <- "Undetermined"
 pD$Groups[is.na(pD$Groups)] <- "Undetermined"
 
-pD.so <- pD[pD$PreCorrectionOutlier=="No",]
-p0 <- ggplot(pD.so, aes(x=UMAP1Uncor, y=UMAP2Uncor, color=MajorGroups)) +
-    geom_point(size=1)  +
-    scale_color_brewer(palette="Set1")
-p1 <- ggplot(pD.so, aes(x=UMAP1, y=UMAP2,color=MajorGroups)) +
+p1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2,color=MajorGroups)) +
     geom_point(size=1) +
     scale_color_brewer(palette="Set1")
-plot_grid(p0,p1)
+p1
+```
 
-grps <- group_by(filter(pD,MajorGroups!="Undetermined"), CorCluster, Groups) %>%
+```{r, message=FALSE, fig.width=10, fig.height=5}
+celltypes <- read.csv("../data/firstBatch_Robjects/CellTypes.csv",stringsAsFactors=FALSE)
+grps <- group_by(filter(pD,MajorGroups!="Undetermined"), Cluster, Groups) %>%
     summarize(n=n()) %>%
     mutate(frac=n/sum(n)) %>%
     ungroup() %>%
-    ggplot(.,aes(x=CorCluster, y=frac, fill=Groups)) +
+    ggplot(.,aes(x=Cluster, y=frac, fill=Groups)) +
     geom_bar(stat="identity") 
 
-ctypes <- group_by(filter(pD,MajorGroups!="Undetermined"), CorCluster, CellType ) %>%
+ctypes <- group_by(filter(pD,MajorGroups!="Undetermined"), Cluster, CellType ) %>%
     summarize(n=n()) %>%
     mutate(frac=n/sum(n)) %>%
     ungroup() %>%
-    ggplot(.,aes(x=CorCluster, y=frac, fill=CellType)) +
+    ggplot(.,aes(x=Cluster, y=frac, fill=CellType)) +
     geom_bar(stat="identity") 
 
 grps
@@ -199,7 +160,7 @@ ctypes
 ```{r, message=FALSE, fig.width=8, fig.height=8}
 pD.sub <- pD[pD$MajorGroups!="Undetermined",]
 
-conf <- as.matrix(table(pD.sub$CellType,pD.sub$CorCluster))
+conf <- as.matrix(table(pD.sub$CellType,pD.sub$Cluster))
 conf <- t(t(conf)/colSums(conf))
 library(pheatmap)
 pheatmap(conf,
@@ -207,9 +168,6 @@ pheatmap(conf,
 	 cluster_cols=FALSE)
 ```
 
-```{r, message=FALSE, fig.width=8, fig.height=8}
-table(pD$PreCorrectionOutlier,pD$CorCluster)
-```
 
 ### Can we still do the pseudotumor time trajectory?
 - It's not looking great but also not awful
@@ -218,11 +176,11 @@ table(pD$PreCorrectionOutlier,pD$CorCluster)
 - might be an issue of cell type definition as this isn't done properly here
 ```{r, message=FALSE, fig.width=10, fig.height=5}
 m.raw <- readRDS("../data/combined_Robjects/CountMatrix.rds")
-conf <- as.matrix(table(pD$Groups,pD$CorCluster))
+conf <- as.matrix(table(pD$Groups,pD$Cluster))
 conf <- t(t(conf)/colSums(conf))
 myeloid.clusters <- colnames(conf)[conf["Myeloid",]>0.2]
 myeloid.clusters <- myeloid.clusters[!is.na(myeloid.clusters)]
-myeloid.cells <- pD$barcode[pD$CorCluster %in% myeloid.clusters]
+myeloid.cells <- pD$barcode[pD$Cluster %in% myeloid.clusters]
 
 rownames(pD) <- pD$barcode
 pD.sub <- pD[myeloid.cells,]
