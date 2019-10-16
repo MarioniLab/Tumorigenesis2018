@@ -353,12 +353,12 @@ sumCountsAcrossCells  <- function(m,grps) {
     return(out)
 }
 
-get_umap_graph <- function(umap) {
+get_umap_graph <- function(umap_output) {
     require(Matrix)
     require(igraph)
     # extracts the graph information and outputs a weighted igraph
-    dists.knn <- ump$knn[["distances"]]
-    indx.knn <- ump$knn[["indexes"]]
+    dists.knn <- umap_output$knn[["distances"]]
+    indx.knn <- umap_output$knn[["indexes"]]
     m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
     rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
 
