@@ -126,7 +126,8 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 }
 
 #Cluster stuff
-mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, merge=TRUE, ...)
+
+mergeCluster <- function(x, clusters, min.DE=10, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
 {
     library(scran)
     counter <- c(1:maxRep)
@@ -134,7 +135,7 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 	x <- x[!(rownames(x) %in% removeGenes),]
     }
     for (i in counter) {
-	clust.vals <- levels(clusters)
+	clust.vals <- levels(as.factor(clusters))
 	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01, lfc=1, full.stats=TRUE, ...)
 
 	out <- matrix(nrow=length(clust.vals), ncol=length(clust.vals))
@@ -157,14 +158,16 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 
 	if (merge) {
 	#Compute new groups
+	if (any(is.na(out))) { print("A test did not have enough D.F.") }
+	out[is.na(out)] <- min.DE+1 # This is to prevent hclust from crashing, NAs are produced when their are not enough d.f. for testing. In this case I do not wnat the clusters to be merged because I formally cant test for DE.
 	hc <- hclust(as.dist(out))
 	min.height <- min(hc$height)
 	if (min.height <= min.DE) {
 	    print(paste0(i,". joining of clusters with ",min.height," DE genes"))
 	    cs <- cutree(hc,h=min.height)
 	    newgrps <- sapply(c(1:max(cs)), function(i) paste(names(cs)[cs==i],collapse="."))
-	    csnew <- mapvalues(cs,c(1:max(cs)), newgrps)
-	    clusters <- mapvalues(clusters,names(csnew),csnew)
+	    csnew <- plyr::mapvalues(cs,c(1:max(cs)), newgrps)
+	    clusters <- plyr::mapvalues(clusters,names(csnew),csnew)
 	} else {
 	    break
 	}

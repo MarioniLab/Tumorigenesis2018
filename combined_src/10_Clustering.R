@@ -27,65 +27,6 @@ pD$Cluster <- frstMrg$NewCluster
 write.csv(file="../data/combined_Robjects/Clusters.csv",pD[,c("barcode","Cluster")])
 
 ## Subclustering clusters
-
-mergeCluster <- function(x, clusters, min.DE=10, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
-{
-    library(scran)
-    counter <- c(1:maxRep)
-    if (!is.null(removeGenes)) {
-	x <- x[!(rownames(x) %in% removeGenes),]
-    }
-    for (i in counter) {
-	clust.vals <- levels(as.factor(clusters))
-	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01, lfc=1, full.stats=TRUE, ...)
-
-	out <- matrix(nrow=length(clust.vals), ncol=length(clust.vals))
-	colnames(out) <- clust.vals
-	rownames(out) <- clust.vals
-	for (cl in names(marker.list)) {
-	    sb <- marker.list[[cl]]
-	    sb <- data.frame(sb)
-	    sb <- as.data.frame(sb[,grepl(".log.FDR",colnames(sb))]) # as.data.frame in case it's a single column
-	    if(ncol(sb)==1) {
-		colnames(sb) <- setdiff(names(marker.list),cl)
-	    } else {
-	    colnames(sb) <- gsub("stats.|.log.FDR","",colnames(sb))
-	    }
-	    sb <- colSums(as.matrix(sb) < -2)
-	    sb[cl] <- 0
-	    sb <- sb[match(colnames(out),names(sb))]
-	    out[,cl] <- sb
-	}
-
-	if (merge) {
-	#Compute new groups
-	if (any(is.na(out))) { print("A test did not have enough D.F.") }
-	out[is.na(out)] <- min.DE+1 # This is to prevent hclust from crashing, NAs are produced when their are not enough d.f. for testing. In this case I do not wnat the clusters to be merged because I formally cant test for DE.
-	hc <- hclust(as.dist(out))
-	min.height <- min(hc$height)
-	if (min.height <= min.DE) {
-	    print(paste0(i,". joining of clusters with ",min.height," DE genes"))
-	    cs <- cutree(hc,h=min.height)
-	    newgrps <- sapply(c(1:max(cs)), function(i) paste(names(cs)[cs==i],collapse="."))
-	    csnew <- plyr::mapvalues(cs,c(1:max(cs)), newgrps)
-	    clusters <- plyr::mapvalues(clusters,names(csnew),csnew)
-	} else {
-	    break
-	}
-    } else {
-	break}
-
-	if (length(unique(clusters))==1) {
-	    break
-	}
-    }
-	output <- list("Marker"=marker.list,
-		       "NumberDE"=out,
-		       "NewCluster"=clusters)
-	return(output)
-}
-
-
 compCluster <-  function(pcs, cluster, m, ...) {
 
 	if (nrow(pcs)<100) {
