@@ -143,7 +143,7 @@ out <- bplapply(clusts, function(cl) {
 	     pD.sub <- pD[cells,]
 	     cor.pca.sub <- cor.pca[cells,]
 	     m.sub <- m[,cells]
-	     out <- compCluster(cor.pca.sub, cluster=cl, m=m.sub, block=pD.sub$Batch)
+	     out <- compCluster(cor.pca.sub, cluster=cl, m=m.sub, block=pD.sub$Batch, removeGenes=rownames(fD)[!fD$KeepForHvg])
 	     return(out)
 			  }, BPPARAM=MulticoreParam(4))
 
