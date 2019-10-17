@@ -21,7 +21,9 @@ umapgraph <- readRDS("../data/combined_Robjects/UMAP_graphs.rds")
 igr.cor <- umapgraph[["Corrected"]]
 set.seed(42)
 cl.cor <- cluster_walktrap(igr.cor,steps=5)
-pD$Cluster <- as.factor(paste0("C",cl.cor$membership))
+pD$FirstRoundUnmergedCluster <- as.factor(paste0("C",cl.cor$membership))
+frstMrg <- mergeCluster(m, pD$FirstRoundUnmergedCluster, removeGenes=rownames(fD)[!fD$KeepForHvg], block=pD$Batch)
+pD$Cluster <- frstMrg$NewCluster
 write.csv(file="../data/combined_Robjects/Clusters.csv",pD[,c("barcode","Cluster")])
 
 ## Subclustering clusters
