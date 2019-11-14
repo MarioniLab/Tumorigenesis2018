@@ -126,8 +126,11 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 }
 
 #Cluster stuff
-mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, merge=TRUE, ...)
+mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
 {
+    # This function iteratively merges clusters with expression less or equal than min.DE
+    # x is the log-transformed normalized gene expression matrix
+    # DE is defined as lfc>1 and log FDR <= -2
     library(scran)
     counter <- c(1:maxRep)
     if (!is.null(removeGenes)) {
@@ -149,7 +152,7 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=10, removeGenes=NULL, me
 	    } else {
 	    colnames(sb) <- gsub("stats.|.log.FDR","",colnames(sb))
 	    }
-	    sb <- colSums(as.matrix(sb) < -2)
+	    sb <- colSums(as.matrix(sb) <= -2) # -2 is the log FDR threshold for DE
 	    sb[cl] <- 0
 	    sb <- sb[match(colnames(out),names(sb))]
 	    out[,cl] <- sb
