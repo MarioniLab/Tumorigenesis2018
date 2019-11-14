@@ -128,9 +128,9 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 #Cluster stuff
 mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
 {
-    # This function iteratively merges clusters with expression less or equal than min.DE
+    # This function iteratively merges clusters with a number of DE genes less or equal than min.DE
     # x is the log-transformed normalized gene expression matrix
-    # DE is defined as lfc>1 and log FDR <= -2
+    # DE is defined as lfc>1 and log FDR <= -2 
     library(scran)
     counter <- c(1:maxRep)
     if (!is.null(removeGenes)) {
