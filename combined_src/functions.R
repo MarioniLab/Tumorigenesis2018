@@ -129,20 +129,27 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
 {
     # This function iteratively merges clusters with a number of DE genes less or equal than min.DE
-    # x is the log-transformed normalized gene expression matrix
+    # Clusters is a factor corresponding with a length equal to ncol(x)
+    # x is the log-transformed normalized gene expression matrix (genes x cells)
     # DE is defined as lfc>1 and log FDR <= -2 
-    library(scran)
+    require(scran)
     counter <- c(1:maxRep)
+    # if uninteresting features are to be removed
     if (!is.null(removeGenes)) {
 	x <- x[!(rownames(x) %in% removeGenes),]
     }
+    # Iterate through computing DE genes and merging clusters (if merge=TRUE)
     for (i in counter) {
+	# Compute DE Genes
 	clust.vals <- levels(clusters)
 	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01, lfc=1, full.stats=TRUE, ...)
 
+	## Create Cluster x Cluster matrix with each entry corresponding to number of DE genes (log.FDR <=-2)
+	# Setup matrix
 	out <- matrix(nrow=length(clust.vals), ncol=length(clust.vals))
 	colnames(out) <- clust.vals
 	rownames(out) <- clust.vals
+	# loop through each cluster and get DE genes against every other cluster
 	for (cl in names(marker.list)) {
 	    sb <- marker.list[[cl]]
 	    sb <- data.frame(sb)
@@ -159,15 +166,25 @@ mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, me
 	}
 
 	if (merge) {
+
+	# If a test does not have enough d.f. then findMarkers will output NA
+	# This usually happens if you use say a blocking factor and 
+	# some clusters only appear in some level of that factor
+	# In that case I don't have information to merge them
+	if (any(is.na(out))) { 
+	    print("A test did not have enough D.F.") 
+	    out[is.na(out)] <- min.DE+1 
+	}
 	#Compute new groups
 	hc <- hclust(as.dist(out))
+	#get min number of DE genes
 	min.height <- min(hc$height)
 	if (min.height <= min.DE) {
 	    print(paste0(i,". joining of clusters with ",min.height," DE genes"))
 	    cs <- cutree(hc,h=min.height)
 	    newgrps <- sapply(c(1:max(cs)), function(i) paste(names(cs)[cs==i],collapse="."))
-	    csnew <- mapvalues(cs,c(1:max(cs)), newgrps)
-	    clusters <- mapvalues(clusters,names(csnew),csnew)
+	    csnew <- plyr::mapvalues(cs,c(1:max(cs)), newgrps)
+	    clusters <- plyr::mapvalues(clusters,names(csnew),csnew)
 	} else {
 	    break
 	}
