@@ -258,7 +258,7 @@ keep <- rowMeans(m)>0.01
 
 ## Final data 
 
-- We have data for `r nrow(m)` genes and `r ncol(m)` cells
+- We have data for `r nrow(m[keep,])` genes and `r ncol(m[keep,pD$barcode])` cells
 - Below I just replot the QC plots after filtering.
 ```{r}
 pD <- pD[pD$PassAll,]
