@@ -1,57 +1,51 @@
 # Load Data
 library(scran)
-library(ggplot2)
 library(Matrix)
-library(cowplot)
 library(dplyr)
-library(batchelor)
 library(BiocParallel)
 library(BiocSingular)
-library(viridis)
+library(BiocNeighbors)
 library(igraph)
 library(umap)
-source("functions.R")
 
 # Read in Data
-dataList <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")
+sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
 		      
-m.raw <- readRDS("../data/combined_Robjects/ExpressionList_QC.rds")[["counts"]]
-m <- dataList[["counts"]]
-pD <- dataList[["phenoData"]]
-rownames(pD) <- pD$barcode
-fD <- dataList[["featureData"]]
-rm(dataList)
-
-smps <- unique(pD$SampleID)
+smps <- unique(sce$SampleID)
 out <- bplapply(smps, function(smp) {
     # Subset to sample
-    cells <- pD[pD$SampleID==smp,"barcode"]
+    cells <- sce$SampleID==smp
 
-    m.raw.sub <- m.raw[,cells]
-    m.sub <- m[,cells]
-    m.sub <- m.sub[rowMeans(m.sub)>0.01,]
-    pD.sub <- pD[cells,]
+    sce.sub <- sce[,cells]
 
     # Doublet Scores
     set.seed(42)
-    scrs <- doubletCells(m.raw.sub,BSPARAM=IrlbaParam(),size.factors.norm=pD.sub$SizeFactor)
+    scrs <- doubletCells(sce.sub,BSPARAM=IrlbaParam())
 
-    # Clustering on all genes
-    igr <- buildSNNGraph(m.sub, BSPARAM=IrlbaParam())
+    # Quick SNN Graph on raw counts (!) as I want to cluster doublets together
+    set.seed(42)
+    igr <- buildSNNGraph(sce.sub,
+			 BSPARAM=IrlbaParam(),
+			 assay.type="counts",
+			 BNPARAM=AnnoyParam())
+
+    # Clustering on graph w high resolution
     cl <- cluster_walktrap(igr,steps=2) # steps reduced to 2 to get overly resolved clusters
-    pD.sub$Cluster <- cl$membership
+    sce.sub$Cluster <- cl$membership
 
     # Highly variable genes for UMAP
-    hvg <- getHighVar(m.sub,get.var.out=TRUE, supress.plot=TRUE)
-    hvg <- hvg[rownames(hvg) %in% fD$uniq[fD$KeepForHvg],]
-    hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+    dec.var <- modelGeneVar(sce.sub)
+    dec.var <- dec.var[rowData(sce.sub)$KeepForHvg,]
+    hvg <- getTopHVGs(dec.var, prop=0.1) # prop 0.1 for speed purposes
 
-    ump <- umap(as.matrix(t(m.sub[hvg,])), random_state=42)
-    pD.sub$SubUMAP1 <- ump$layout[,1]
-    pD.sub$SubUMAP2 <- ump$layout[,2]
-    pD.sub$DbltScore <- scrs
+    #UMAP and save
+    ump <- umap(as.matrix(t(logcounts(sce.sub)[hvg,])), random_state=42)
+    sce.sub$SubUMAP1 <- ump$layout[,1]
+    sce.sub$SubUMAP2 <- ump$layout[,2]
+    sce.sub$DbltScore <- scrs
     print(paste0("Done with: ",smp))
-    out <- pD.sub[,c("barcode","Cluster","SubUMAP1","SubUMAP2","DbltScore")]
+    out <- data.frame(colData(sce.sub))
+    out <- out[,c("barcode","Cluster","SubUMAP1","SubUMAP2","DbltScore")]
     return(out)
 },  BPPARAM=MulticoreParam(4))
 names(out) <- smps
