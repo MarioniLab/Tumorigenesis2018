@@ -9,6 +9,7 @@ library(BiocNeighbors)
 
 # Read in Data
 sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
+sce <- sce[,sample(1:ncol(sce),20000)]
 # Split into batch1 and batch2 
 
 sce1 <- sce[,sce$Batch==1]
@@ -41,7 +42,7 @@ mnncor <- batchelor::fastMNN(sce2,sce1,
 pca.cor <- reducedDim(mnncor)
 
 # Compute UMAP 
-ump <- umap(out.final, random_state=42)
+ump <- umap(pca.cor, random_state=42)
 reducedDim(mnncor,type="umap") <- ump$layout[,1:2]
 
 # Save
