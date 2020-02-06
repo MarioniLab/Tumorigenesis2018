@@ -15,7 +15,6 @@ output:
 
 
 # Load Data
-- This file contains the quality control for both batches of the tumorigenesis dataset
 ```{r, message=FALSE}
 library(scran)
 library(scater)
@@ -45,7 +44,7 @@ m <- m[,pD$barcode]
 ```
 
 # Overview
-
+- This file contains the quality control for both batches of the tumorigenesis dataset
 - We have sequenced a total of `r length(unique(pD$Animal))` animals, of which we had `r sum(grepl("CBL",unique(pD$Animal)))` controls, `r length(unique(pD$Animal[pD$AnimalHadTumor]))` animals with tumors and `r length(unique(pD$Animal[!pD$AnimalHadTumor & !grepl("CBLA",pD$Animal)]))` WKBR animals pre-tumor.
 - We have sequenced animals of the following ages
 
@@ -61,8 +60,7 @@ ggplot(fP, aes(x=Genotype, y=as.numeric(Age))) +
 ```
 
 # Number of Cells
-- Not sure what happened to WKBR75.4bMG
-- Will need to see if that is still sensible
+- In the 2nd batch we have two samples with a low cell count
 - Note that the samples from the first batch were sequenced on two chips, hence the number of cells per lane is about half of what you see here. This will result in a low doublet rate.
 - We sequenced slightly less cells than expected, with a total of `r ncol(m)` cells.
 ```{r,fig.width=4,fig.height=8}
@@ -76,11 +74,12 @@ ggplot(fP, aes(x=Condition, y=n)) +
 ```
 
 # Quality Control
-- The distribution for CBLA2 looks quite different, need to have a look at that one
-- Overall we did a good job at sequencing to comparable depths
+- The distribution for CBLA2 looks a bit different presumably related to the fact that there are few cells.
+- Overall we did a good job at sequencing to comparable depths within and across the two batches.
 
 ## Library Sizes
 ```{r}
+
 # Sequencing Depth and Genes detected
 pD$UmiSums<- colSums(m)
 pD$GenesDetected <- colSums(m!=0)
@@ -100,6 +99,7 @@ LibrarySize <- ggplot(pD, aes(x=Condition,y=UmiSums,fill=Batch)) +
     theme_bw() +
     scale_fill_brewer(palette="Dark2") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
 # Cell Viability
 mMito <- m[fD$Mitochondrial,]
 pD$prcntMito <- colSums(mMito)/colSums(m)
@@ -208,7 +208,7 @@ kable(round(ovview,1))
 
 Based on the DE it seems to discard mainly red blood cells, which is fine.
 
-```{r}
+```{r, message=FALSE, trend=FALSE}
 ggplot(pD, aes(x=log10(UmiSums), y=log10(GenesDetected), color=PassTrend)) +
     geom_point()
 
@@ -233,7 +233,7 @@ ggplot(fplot, aes(x=abundance, y=logFC)) +
 Here we perform DE between discarded and kept cells. Ideally you wouldn't see any marker genes for particular cell types pop up.
 
 - Overall we get rid of RBCs and dead cells, which is what we want.
-```{r}
+```{r, message=FALSE, trend=FALSE}
 lost <- calculateAverage(m[,!pD$PassAll])
 kept <- calculateAverage(m[,pD$PassAll])
 
@@ -251,14 +251,15 @@ ggplot(fplot, aes(x=abundance, y=logFC)) +
 
 ## Gene-wise
 
-- Genes with a mean log expression lower that 0.01 are removed from the dataset.
+- At this stage I only remove genes without any reads
 ```{r}
-keep <- rowMeans(m)>0.01 
+keep <- rowSums(m)!=0
 ```
 
 ## Final data 
 
-- We have data for `r nrow(m)` genes and `r ncol(m)` cells
+- We have data for `r nrow(m[keep,])` genes and `r ncol(m[keep,pD$barcode])` cells
+- Below I just replot the QC plots after filtering.
 ```{r}
 pD <- pD[pD$PassAll,]
 m <- m[keep,pD$barcode]
@@ -271,11 +272,10 @@ cellViability %+% pD
 ## Save Data
 
 ```{r}
-out <- list()
-out[["counts"]] <- m
-out[["phenoData"]] <- pD
-out[["featureData"]] <- fD
-saveRDS(out,file="../data/combined_Robjects/ExpressionList_QC.rds")
+sceout <- SingleCellExperiment(assays=list(counts=m),
+			       colData=pD,
+			       rowData=fD)
+saveRDS(sceout,file="../data/combined_Robjects/SCE_QC.rds")
 ```
 
 ## Session Info
