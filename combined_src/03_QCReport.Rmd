@@ -28,13 +28,15 @@ library(Matrix)
 library(viridis)
 library(DT)
 # source("functions.R")
+theme_set(theme_cowplot())
 
 # Load Data
-dataList <- readRDS("../data/combined_Robjects/ExpressionList.rds")
-m <- dataList[["counts"]]
-pD <- dataList[["phenoData"]]
-fD <- dataList[["featureData"]]
-rm(dataList)
+sce <- readRDS("../data/combined_Robjects/SCE.rds")
+
+m <- counts(sce)
+pD <- data.frame(colData(sce))
+fD <- data.frame(rowData(sce))
+rm(sce)
 
 # I will also shuffle the rows of pD and columns of m for plotting purpose and to prevent any funny effects from the ordering
 set.seed(300)
@@ -182,12 +184,15 @@ pdect <- t((table(pD$PassGenesDetected,pD$Condition)))
 pdect <- (pdect[,1]/pdect[,2])*100
 via <- t((table(pD$PassViability,pD$Condition)))
 via <- (via[,1]/via[,2])*100
+trend <- t((table(pD$PassTrend,pD$Condition)))
+trend <- (trend[,1]/trend[,2])*100
 pall <- t((table(pD$PassAll,pD$Condition)))
 pall <- (pall[,1]/pall[,2])*100
 
 ovview <- data.frame("LibSize"=lsize,
 		     "GenesDetected"=pdect,
 		     "Viability"=via,
+		     "Trend"=trend,
 		     "All"=pall)
 
 library(pheatmap)
@@ -199,13 +204,60 @@ pheatmap(ovview,cluster_rows=FALSE,
 kable(round(ovview,1))
 ```
 
+## Sanity Check the trend filter
+
+Based on the DE it seems to discard mainly red blood cells, which is fine.
+
+```{r}
+ggplot(pD, aes(x=log10(UmiSums), y=log10(GenesDetected), color=PassTrend)) +
+    geom_point()
+
+lost <- calculateAverage(m[,!pD$PassTrend])
+kept <- calculateAverage(m[,pD$PassTrend])
+
+library(edgeR)
+logged <- cpm(cbind(lost, kept), log=TRUE, prior.count=2)
+logFC <- logged[,1] - logged[,2]
+abundance <- rowMeans(logged)
+fplot <- data.frame("abundance"=abundance,
+		    "logFC"=logFC,
+		    "Name"=names(logFC))
+fplot <- arrange(fplot,desc(abs(logFC)))
+ggplot(fplot, aes(x=abundance, y=logFC)) +
+    geom_point() +
+    geom_label(data=fplot[1:10,], aes(label=Name))
+
+```
+
+## Sanity Check QC overall
+Here we perform DE between discarded and kept cells. Ideally you wouldn't see any marker genes for particular cell types pop up.
+
+- Overall we get rid of RBCs and dead cells, which is what we want.
+```{r}
+lost <- calculateAverage(m[,!pD$PassAll])
+kept <- calculateAverage(m[,pD$PassAll])
+
+logged <- cpm(cbind(lost, kept), log=TRUE, prior.count=2)
+logFC <- logged[,1] - logged[,2]
+abundance <- rowMeans(logged)
+fplot <- data.frame("abundance"=abundance,
+		    "logFC"=logFC,
+		    "Name"=names(logFC))
+fplot <- arrange(fplot,desc(abs(logFC)))
+ggplot(fplot, aes(x=abundance, y=logFC)) +
+    geom_point() +
+    geom_label(data=fplot[1:10,], aes(label=Name))
+```
+
 ## Gene-wise
+
 - Genes with a mean log expression lower that 0.01 are removed from the dataset.
 ```{r}
 keep <- rowMeans(m)>0.01 
 ```
 
 ## Final data 
+
 - We have data for `r nrow(m)` genes and `r ncol(m)` cells
 ```{r}
 pD <- pD[pD$PassAll,]
@@ -214,19 +266,20 @@ fD <- fD[keep,]
 genesDetected %+% pD
 LibrarySize %+% pD
 cellViability %+% pD
-gDLib %+% pD
-
-uniqnames <- uniquifyFeatureNames(fD$id,fD$symbol)
-uniqnames <- gsub("-",".",uniqnames)
-fD$uniqnames <- uniqnames
-rownames(fD) <- rownames(m) <- uniqnames
 ```
 
 ## Save Data
+
 ```{r}
 out <- list()
 out[["counts"]] <- m
 out[["phenoData"]] <- pD
 out[["featureData"]] <- fD
 saveRDS(out,file="../data/combined_Robjects/ExpressionList_QC.rds")
+```
+
+## Session Info
+
+```{r}
+sessionInfo()
 ```

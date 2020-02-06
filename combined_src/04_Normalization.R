@@ -3,7 +3,6 @@ library(BiocSingular)
 library(BiocParallel)
 source("functions.R")
 dataList <- readRDS(file="../data/combined_Robjects/ExpressionList_QC.rds")
-# dataList <- subSample(dataList,cell.number=5000)
 m <- dataList[["counts"]]
 pD <- dataList[["phenoData"]]
 fD <- dataList[["featureData"]]
@@ -15,6 +14,7 @@ b2 <- pD[pD$Batch==2,"barcode"]
 # Batch 1
 m1 <- m[,colnames(m) %in% b1]
 sce1 <- SingleCellExperiment(assays=list(counts=m1))
+set.seed(42)
 clusters <- quickCluster(m1, method="igraph", use.ranks=TRUE, d=50, BSPARAM=IrlbaParam(),BPPARAM=MulticoreParam(4))
 sce1 <- computeSumFactors(sce1, clusters=clusters)
 
@@ -23,6 +23,7 @@ plot(log10(sizeFactors(sce1)),log10(colSums(m1)),pch=19,xlab="Log(SizeFactors)",
 # Batch 2
 m2 <- m[,colnames(m) %in% b2]
 sce2 <- SingleCellExperiment(assays=list(counts=m2))
+set.seed(42)
 clusters <- quickCluster(m2, method="igraph", use.ranks=TRUE, d=50, BSPARAM=IrlbaParam(),BPPARAM=MulticoreParam(4))
 sce2 <- computeSumFactors(sce2, clusters=clusters)
 plot(log10(sizeFactors(sce2)),log10(colSums(m2)),pch=19,xlab="Log(SizeFactors)",ylab="Log(LibrarySize)")

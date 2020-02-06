@@ -126,21 +126,30 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 }
 
 #Cluster stuff
-
-mergeCluster <- function(x, clusters, min.DE=10, maxRep=30, removeGenes=NULL, merge=TRUE, ...)
+mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
 {
-    library(scran)
+    # This function iteratively merges clusters with a number of DE genes less or equal than min.DE
+    # Clusters is a factor corresponding with a length equal to ncol(x)
+    # x is the log-transformed normalized gene expression matrix (genes x cells)
+    # DE is defined as lfc>1 and log FDR <= -2 
+    require(scran)
     counter <- c(1:maxRep)
+    # if uninteresting features are to be removed
     if (!is.null(removeGenes)) {
 	x <- x[!(rownames(x) %in% removeGenes),]
     }
+    # Iterate through computing DE genes and merging clusters (if merge=TRUE)
     for (i in counter) {
-	clust.vals <- levels(as.factor(clusters))
+	# Compute DE Genes
+	clust.vals <- levels(clusters)
 	marker.list <- findMarkers(x,clusters,subset.row=rowMeans(x)>0.01, lfc=1, full.stats=TRUE, ...)
 
+	## Create Cluster x Cluster matrix with each entry corresponding to number of DE genes (log.FDR <=-2)
+	# Setup matrix
 	out <- matrix(nrow=length(clust.vals), ncol=length(clust.vals))
 	colnames(out) <- clust.vals
 	rownames(out) <- clust.vals
+	# loop through each cluster and get DE genes against every other cluster
 	for (cl in names(marker.list)) {
 	    sb <- marker.list[[cl]]
 	    sb <- data.frame(sb)
@@ -150,17 +159,27 @@ mergeCluster <- function(x, clusters, min.DE=10, maxRep=30, removeGenes=NULL, me
 	    } else {
 	    colnames(sb) <- gsub("stats.|.log.FDR","",colnames(sb))
 	    }
-	    sb <- colSums(as.matrix(sb) < -2)
+	    sb <- colSums(as.matrix(sb) <= -2) # -2 is the log FDR threshold for DE
 	    sb[cl] <- 0
 	    sb <- sb[match(colnames(out),names(sb))]
 	    out[,cl] <- sb
 	}
 
 	if (merge) {
+
+	# If a test does not have enough d.f. then findMarkers will output NA
+	# This usually happens if you use say a blocking factor and 
+	# some clusters only appear in some level of that factor
+	# In that case I don't have information to merge them
+	if (any(is.na(out))) { 
+	    print("A test did not have enough D.F.") 
+	    out[is.na(out)] <- min.DE+1 
+	}
 	#Compute new groups
 	if (any(is.na(out))) { print("A test did not have enough D.F.") }
 	out[is.na(out)] <- min.DE+1 # This is to prevent hclust from crashing, NAs are produced when their are not enough d.f. for testing. In this case I do not wnat the clusters to be merged because I formally cant test for DE.
 	hc <- hclust(as.dist(out))
+	#get min number of DE genes
 	min.height <- min(hc$height)
 	if (min.height <= min.DE) {
 	    print(paste0(i,". joining of clusters with ",min.height," DE genes"))

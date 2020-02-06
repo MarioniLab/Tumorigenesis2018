@@ -14,7 +14,6 @@ source("functions.R")
 
 # Read in Data
 dataList <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")
-# dataList <- subSample(dataList,cell.number=50000)
 		      
 m.raw <- readRDS("../data/combined_Robjects/ExpressionList_QC.rds")[["counts"]]
 m <- dataList[["counts"]]
@@ -34,7 +33,7 @@ out <- bplapply(smps, function(smp) {
     pD.sub <- pD[cells,]
 
     # Doublet Scores
-    set.seed(2206)
+    set.seed(42)
     scrs <- doubletCells(m.raw.sub,BSPARAM=IrlbaParam(),size.factors.norm=pD.sub$SizeFactor)
 
     # Clustering on all genes
@@ -44,7 +43,7 @@ out <- bplapply(smps, function(smp) {
 
     # Highly variable genes for UMAP
     hvg <- getHighVar(m.sub,get.var.out=TRUE, supress.plot=TRUE)
-    hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
+    hvg <- hvg[rownames(hvg) %in% fD$uniq[fD$KeepForHvg],]
     hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
 
     ump <- umap(as.matrix(t(m.sub[hvg,])), random_state=42)
