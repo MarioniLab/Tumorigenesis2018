@@ -27,7 +27,7 @@ out <- bplapply(smps, function(smp) {
     igr <- buildSNNGraph(sce.sub,
 			 BSPARAM=IrlbaParam(),
 			 assay.type="counts",
-			 BNPARAM=AnnoyParam())
+			 BNPARAM=AnnoyParam()) # If slow maybe set a threshold on mean
 
     # Clustering on graph w high resolution
     cl <- cluster_walktrap(igr,steps=2) # steps reduced to 2 to get overly resolved clusters

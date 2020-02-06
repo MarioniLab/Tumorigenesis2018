@@ -251,9 +251,9 @@ ggplot(fplot, aes(x=abundance, y=logFC)) +
 
 ## Gene-wise
 
-- Genes with a mean log expression lower that 0.01 are removed from the dataset.
+- At this stage I only remove genes without any reads
 ```{r}
-keep <- rowMeans(m)>0.01 
+keep <- rowSums(m)!=0
 ```
 
 ## Final data 
