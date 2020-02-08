@@ -21,7 +21,7 @@ out <- bplapply(smps, function(smp) {
     # Highly variable genes
     dec.var <- modelGeneVar(sce.sub)
     dec.var <- dec.var[rowData(sce.sub)$KeepForHvg,]
-    hvgs <- getTopHVGs(dec.var) 
+    hvgs <- getTopHVGs(dec.var, prop=0.5)  # this is for the sake of speed
 
     set.seed(42)
     scrs <- doubletCells(sce.sub,BSPARAM=IrlbaParam(),
