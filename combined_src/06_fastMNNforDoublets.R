@@ -9,7 +9,7 @@ library(BiocNeighbors)
 
 # Read in Data
 sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
-sce <- sce[,sample(1:ncol(sce),20000)]
+# sce <- sce[,sample(1:ncol(sce),20000)]
 # Split into batch1 and batch2 
 
 sce1 <- sce[,sce$Batch==1]
@@ -26,7 +26,7 @@ combVar <- combVar[rowData(sce)$KeepForHvg,]
 hvgs <- getTopHVGs(combVar)
 
 # mnnCorrect
-param <- MulticoreParam(workers=2)
+param <- MulticoreParam(workers=4)
 
 set.seed(300)
 mnncor <- batchelor::fastMNN(sce2,sce1,

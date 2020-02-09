@@ -5,47 +5,45 @@ library(Matrix)
 library(umap)
 library(scran)
 library(igraph)
+library(BiocSingular)
 source("functions.R")
 
-dataList <- readRDS("../data/combined_Robjects/ExpressionList_QC_norm.rds")
-# dataList <- subSample(dataList,cell.number=60000)
-m <- dataList[["counts"]]
-pD <- dataList[["phenoData"]]
-fD <- dataList[["featureData"]]
-rm(dataList)
-
-# Remove Doublets 
+sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
+# sce <- sce[,sample(ncol(sce),5000)]
+# Remove Anything that failed second round of QC 
 qcMets <- read.csv("../data/combined_Robjects/QC_Part2.csv",row.names=1,stringsAsFactors=FALSE)
 rmCells <- qcMets$barcode[qcMets$isDoubletFinal | qcMets$isRbc]
 
-pD <- pD[!pD$barcode %in% rmCells,]
-m <- m[,pD$barcode]
+sce <- sce[,!colnames(sce) %in% rmCells]
 
-# ---- Pre-Correction ----
+var.dec <- modelGeneVar(sce)
+var.dec <- var.dec[rowData(sce)$KeepForHvg,]
+hvgs <- getTopHVGs(var.dec)
+out <- data.frame("barcode"=colnames(sce))
 
-# Highly variable genes
-hvg <- getHighVar(m,get.var.out=TRUE, supress.plot=TRUE)
-hvg <- hvg[rownames(hvg) %in% fD$uniqnames[fD$KeepForHvg],]
-hvg <- rownames(hvg[order(hvg$bio, decreasing=TRUE),])[1:(nrow(hvg)/10)]
+set.seed(100)
+pcs <- runPCA(t(logcounts(sce)[hvgs,]),BSPARAM=IrlbaParam(),rank=50)
 
 # UMAP
-ump <- umap(as.matrix(t(m[hvg,])), random_state=42)
-pD$UMAP1Uncor <- ump$layout[,1]
-pD$UMAP2Uncor <- ump$layout[,2]
+pca.uncor <- pcs$x
+rownames(pca.uncor) <- colnames(sce)
+ump <- umap(pca.uncor, random_state=42)
+out$UMAP1Uncor <- ump$layout[,1]
+out$UMAP2Uncor <- ump$layout[,2]
 
 igr.uncor <- get_umap_graph(ump)
 
 # ---- After Correction -----
 m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
-m.cor <- m.cor[pD$barcode,]
-ump <- umap(m.cor, random_state=42)
-pD$UMAP1 <- ump$layout[,1]
-pD$UMAP2 <- ump$layout[,2]
+m.cor <- m.cor[colnames(sce),]
+ump.cor <- umap(m.cor, random_state=42)
+out$UMAP1 <- ump.cor$layout[,1]
+out$UMAP2 <- ump.cor$layout[,2]
 
-igr.cor <- get_umap_graph(ump)
+igr.cor <- get_umap_graph(ump.cor)
 
 
-out <- list("Corrected"=igr.cor,
+out2 <- list("Corrected"=igr.cor,
 	    "Uncorrected"=igr.uncor)
-saveRDS(out,"../data/combined_Robjects/UMAP_graphs.rds")
-write.csv(pD[,c("barcode","UMAP1","UMAP2","UMAP1Uncor","UMAP2Uncor")],file="../data/combined_Robjects/UMAP_corrected.csv")
+saveRDS(out2,"../data/combined_Robjects/UMAP_graphs.rds")
+write.csv(out,file="../data/combined_Robjects/UMAP_corrected.csv")
