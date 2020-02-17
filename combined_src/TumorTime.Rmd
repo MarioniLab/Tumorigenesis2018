@@ -1,0 +1,453 @@
+---
+title: "Tumorigenesis"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# The problem
+
+We are interested in finding patterns that are associated with tumorigenesis.
+For this we need to have a (per-sample) covariate that represents the process of tumorigenesis to a certain extent
+The only one we have is the age of the animal.
+Despite being highly correlated with the onset of tumorigenesis, the variability in latency would confound the analysis.
+Hence, we want to estimate some sort of "biological time", potentially from the data.
+
+```{r, message=FALSE, warning=FALSE}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(viridis)
+library(knitr)
+library(wesanderson)
+library(DT)
+source("functions.R")
+theme_set(theme_cowplot())
+
+# Load Data
+sce <- readRDS("../data/combined_Robjects/SCE_final.rds")
+sce <- sce[,!sce$Condition %in% c("CBLA0","CBLA1","CBLA2")]
+colnames(sce) <- sce$barcode ### I have to fix this somewhere else
+pD <- data.frame(colData(sce))
+set.seed(42)
+pD <- pD[sample(nrow(pD),nrow(pD)),]
+umps <- read.csv("../data/combined_Robjects/UMAP_corrected.csv")[,-1]
+pD <- left_join(pD,umps[,c("barcode","UMAP1Uncor","UMAP2Uncor")])
+```
+
+## Sample Overview
+These are the ages at which the WKBR animals were collected.
+This includes two tumors in the last two groups of two.
+```{r, message=FALSE, fig.width=6, fig.height=3}
+sumry <- group_by(pD, Batch, Age, Condition) %>%
+    summarize(n=n())
+
+sumry <- sumry[grepl("WKBR",sumry$Condition),]
+timeplt <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
+    geom_segment(aes(x=25, y=0, xend=60, yend=0,
+		     color=NULL),
+                  arrow=arrow(length=unit(0.5, "cm"))) +
+    geom_segment(aes(x=30, y=0.05, xend=30, yend=0,
+		     color=NULL),
+                  arrow=arrow(length=unit(0.3, "cm"))) +
+    geom_dotplot(aes(fill=Batch, group=Batch), binwidth=1, 
+		 stackgroups=TRUE, binpositions="all") +
+    xlim(25,60) +
+    ylim(0,.5) +
+    scale_fill_manual(values=c("grey50","black"))  +
+    xlab("Age") +
+    ggtitle("Timepoints of Collection") +
+    theme(axis.title.y=element_blank(),
+	  axis.line.x=element_blank(),
+	  axis.line.y=element_blank(),
+	  axis.text.y=element_blank(),
+	  legend.position="none",
+	  axis.ticks.y=element_blank(),
+	  axis.ticks.x=element_line(size=1, linetype="solid"),
+	  axis.ticks.length.x=unit(.5,"cm"))
+timeplt
+```
+
+
+# Potential Solutions
+
+## Expression based
+In this section I will explore approaches that directly utilize the gene expression to estimate a pseudo-tumor time.
+
+### PCAs {.tabset .tabset-fade}
+After having compared PCAs on the various compartments, I found the one on either the whole data or epithelium only the most compelling ones.
+The disadvantage of using a subset is that it might appear biased, however I think it's hard to argue against using all epithelial.
+On the plus side using a subset might make analyses of other subsets independent of this ordering.
+However, this also only true to a certain extent if we ignoring potential cross-talk between the signal in the epithelial compartment and the other compartments.
+```{r, message=FALSE, warning=FALSE}
+getPC <- function(sce) {
+    sce.sum <- aggregateAcrossCells(sce,
+			  id=DataFrame(Condition=sce$Condition))
+
+    library(edgeR)
+    y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+
+    #     discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower")
+    #     y <- y[,!discarded]
+    #     summary(discarded)
+
+    keep <- filterByExpr(y, group=y$samples$Condition)
+    y <- y[keep,]
+    y <- calcNormFactors(y)
+    logcpm <- cpm(y,log=TRUE)
+    # 
+    cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
+    #
+    pcs <- prcomp(t(cor.logcpm))
+    pca <- data.frame(pcs$x)
+    pca[,"Condition"] <- y$samples$Condition
+    pca$Age <- y$samples$Age
+    pca$Batch <- y$samples$Batch
+    # pca$CellTypes <- y$samples$CellTypes
+    rownames(pca) <- pca$Condition
+    return(pca)
+}
+
+plotPC <- function(pca) {
+    pcs <- as.matrix(pca[,grepl("PC",colnames(pca))])
+    vars <- apply(pcs,2,var)
+    rel.vars <- round(vars/sum(vars)*100,1)
+    # 
+    library(ggrepel)
+    pout <- ggplot(pca, aes(x=PC1, y=PC2, color=Age,label=Condition,shape=Batch)) +
+	    geom_text_repel(size=3) +
+	    geom_point(size=2) +
+	    xlab(paste0("PC1(",rel.vars[1],"%)")) +
+	    ylab(paste0("PC2(",rel.vars[2],"%)")) +
+	    theme_bw() +
+	    coord_fixed(1)
+    return(pout)
+}
+
+#All Cells
+pcs.all <- getPC(sce) 
+p.all <- plotPC(pcs.all) + ggtitle("Full Data")# + theme(legend.position="none")
+
+#Epithelial
+sce.epi <- sce[,sce$MajorGroups %in% "Epithelial"]
+pcs.epi <- getPC(sce.epi)
+p.epi <- plotPC(pcs.epi) + ggtitle("All Epithelial")# + theme(legend.position="none")
+
+#Luminal+Tm
+sce.lum <- sce[,sce$CellTypes %in% c("Av","Lp","LpTm","Tm1","Tm2")]
+pcs.lum <- getPC(sce.lum)
+p.lum <- plotPC(pcs.lum) + ggtitle("All Luminal")# + theme(legend.position="none")
+
+#Immune
+sce.im <- sce[,sce$MajorGroups %in% "Immune"]
+pcs.im <- getPC(sce.im)
+p.im <- plotPC(pcs.im) + ggtitle("All Immune")# + theme(legend.position="none")
+
+#Myeloid
+sce.mye <- sce[,sce$Groups %in% "Myeloid"]
+pcs.mye <- getPC(sce.mye)
+p.mye <- plotPC(pcs.mye) + ggtitle("All Myeloid")
+```
+
+#### All 
+```{r, message=FALSE, warning=FALSE}
+p.all
+```
+
+#### Epithelial 
+```{r, message=FALSE, warning=FALSE}
+p.epi
+```
+
+#### Luminal 
+```{r, message=FALSE, warning=FALSE}
+p.lum
+```
+
+#### Immune 
+```{r, message=FALSE, warning=FALSE}
+p.im
+```
+
+#### Myeloid 
+```{r, message=FALSE, warning=FALSE}
+p.mye
+```
+
+#### All vs Epithelial
+This is just to compare all versus epithelial
+```{r, message=FALSE, warning=FALSE}
+pcs.all <- pcs.all[rownames(pcs.epi),]
+pcs.epi$PC1All <- pcs.all$PC1
+ggplot(pcs.epi, aes(x=PC1, y=PC1All, color=Age, label=Condition)) +
+	    geom_text_repel(size=3) +
+	    geom_point(size=2) +
+	    xlab("PC1 Epithelial") +
+	    ylab("PC1 All") +
+	    theme_bw() 
+```
+
+### New Ordering
+```{r, message=FALSE, warning=FALSE, fig.width=7, fig.height=3.5}
+sumry <- arrange(sumry,Age)
+sumry$Condition <- factor(sumry$Condition,
+			  levels=sumry$Condition)
+cols <- data.frame(Age=unique(sumry$Age))
+cols$cols <- plasma(nrow(cols),begin=1,end=0)
+
+sumry <- left_join(sumry,cols)
+
+timeplt_byCond <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
+    geom_segment(aes(x=25, y=0, xend=60, yend=0,
+		     color=NULL),
+		 arrow=arrow(length=unit(0.5, "cm"))) +
+geom_segment(aes(x=30, y=0.05, xend=30, yend=0,
+		 color=NULL),
+	     arrow=arrow(length=unit(0.3, "cm"))) +
+geom_dotplot(aes(fill=Condition, group=Condition), binwidth=1, 
+	     stackgroups=TRUE, binpositions="all") +
+xlim(25,60) +
+ylim(0,.5) +
+xlab("Age") +
+scale_fill_manual(values=sumry$cols) +
+ggtitle("Timepoints of Collection") +
+theme(axis.title.y=element_blank(),
+      axis.line.x=element_blank(),
+      axis.line.y=element_blank(),
+      axis.text.y=element_blank(),
+      legend.position="none",
+      axis.ticks.y=element_blank(),
+      axis.ticks.x=element_line(size=1, linetype="solid"),
+      axis.ticks.length.x=unit(.5,"cm"))
+
+pcs.all$ptime <- (pcs.all$PC1-min(pcs.all$PC1))/max(pcs.all$PC1-min(pcs.all$PC1)) * 100
+
+sumry <- left_join(sumry,pcs.all[,c("Condition","ptime")])
+sumry$Condition <- factor(sumry$Condition,
+			  levels=sumry$Condition)
+pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
+    geom_segment(aes(x=0, y=0, xend=110, yend=0,
+		     color=NULL),
+		 arrow=arrow(length=unit(0.5, "cm"))) +
+geom_dotplot(aes(fill=Condition, group=Condition), binwidth=1, 
+	     stackgroups=TRUE, binpositions="all", dotsize=2) +
+xlim(0,110) +
+ylim(0,.5) +
+xlab("Pseudotime") +
+scale_fill_manual(values=sumry$cols) +
+ggtitle("Inferred Order") +
+theme(axis.title.y=element_blank(),
+      axis.line.x=element_blank(),
+      axis.line.y=element_blank(),
+      axis.text.y=element_blank(),
+      legend.position="none",
+      axis.ticks.y=element_blank(),
+      axis.ticks.x=element_line(size=1, linetype="solid"),
+      axis.ticks.length.x=unit(.5,"cm"))
+
+timeplt_byCond
+pseudotimeplt_byCond
+```
+
+### Checks
+
+There are certain things we can assume should be true if PC1 corresponds to tumor development.
+
+1. It should be positively correlated with age
+2. Similarity to wildtype data should decrease along PC1
+3. The MPA-DMBA timeseries data should be mapped according to time
+
+#### Correlation with Age
+Animals with higher age on average have a higher PC1 values.
+```{r, message=FALSE, warning=FALSE}
+cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
+
+ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
+    geom_point() + 
+    xlab("PC1") +
+    ylab("Age [w]") +
+    geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
+```
+
+#### Similarity to wildtype
+Above I have excluded two wildtype samples when computing the PCA.
+I here compute the correlation to the mean of the two wildtype samples and plot it against the PC1 values.
+```{r, message=FALSE, warning=FALSE}
+sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
+
+sce.sum <- aggregateAcrossCells(sce.full,
+		      id=DataFrame(Condition=sce.full$Condition))
+rm(sce.full)
+library(edgeR)
+y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+y <- calcNormFactors(y)
+logcpm <- cpm(y,log=TRUE)
+# 
+cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
+colnames(cor.logcpm) <- y$samples$Condition
+wt.logcpm <- rowMeans(cor.logcpm[,c("CBLA0","CBLA1")])
+wkbrs.logcpm <- cor.logcpm[,grepl("WKBR",colnames(cor.logcpm))]
+cors <- apply(wkbrs.logcpm,2, function(x) cor(wt.logcpm,x))
+add <- data.frame("Condition"=names(cors),
+		  "CorrToWt"=cors)
+pcs.all <- left_join(pcs.all, add)
+
+cr <- round(cor(pcs.all$CorrToWt, pcs.all$PC1),2)
+ggplot(pcs.all, aes(x=PC1, y=CorrToWt)) +
+    geom_point() +
+    geom_text(x=100,y=0.97,label=paste0("Cor: ",cr))
+```
+
+#### MPA-DMBA Data
+I here compare the Brca1 timeline experiment to the DMBA timeline.
+As a reminder in the DMBA timeline we have collected several timepoints during tumor formation after MPA-DMBA treatment.
+The experiment contained untreated (T0), MPA-only (T1) and then animals in two weeks interval up to 10 weeks post last MPA.
+It also contained three tumor in total from group T5 and T6.
+```{r, message=FALSE, warning=FALSE}
+# This is the sample annotation
+pDat <- read.csv("../../LinTracing/LinTracing/DMBATimeline/data/results/SLX-18286.HGCKCDRXX.s_1.contents.csv")
+pDat$Barcode <- gsub("-","_",pDat$Barcode)
+pDat$Sample <- paste0("S",pDat$Sample)
+pDat$Timepoint <- substring(pDat$Sample,1,2)
+pDat$Timepoint <- gsub("S","T",pDat$Timepoint)
+pDat$Tumor <- pDat$Sample %in% c("S5BT","S5CT","S6DT")
+pDat <- pDat[,c("Barcode","Sample","Timepoint","Tumor")]
+# Read in Counts
+counts <- read.csv("../../LinTracing/LinTracing/DMBATimeline/data/results/CountMatrix.csv",row.names=1)
+counts <- counts[,pDat$Barcode]
+rownames(pDat) <- colnames(counts) <- pDat$Sample
+
+# Move stats to PD
+pDat$Unmapped <- t(counts)[,1]
+pDat$MultiMap <- t(counts)[,2]
+pDat$NoFeat <- t(counts)[,3]
+pDat$Ambiguous <- t(counts)[,4]
+counts <- counts[-c(1:4),]
+pDat$TotalReads <- colSums(counts)
+
+# Add Gene Annotation
+library(biomaRt)
+ensembl  <- useMart("ensembl",dataset="mmusculus_gene_ensembl",host="useast.ensembl.org") 
+gene.data <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name'), mart=ensembl)
+gene.data <- gene.data[!is.na(gene.data[,1]),]
+gene.data.extra <- data.frame("ensembl_gene_id"=setdiff(rownames(counts),gene.data$ensembl_gene_id),
+			      "external_gene_name"=NA)
+gene.data <- rbind(gene.data,gene.data.extra)
+gene.data$uniq <- scater::uniquifyFeatureNames(gene.data[,1],gene.data[,2])
+# Love this there are genes that are not in ensembl but are in the alignment
+rownames(gene.data) <- gene.data$ensembl_gene_id
+gene.data <- gene.data[rownames(counts),]
+# rownames(counts) <- gene.data$uniq
+kable(table(pDat$Timepoint,pDat$Tumor))
+```
+
+Below I recompute the PCA on the single-cell data on all genes that were also measured in the DMBA data (this only excludes 70 genes).
+I then apply the same rotation from the PCA to the DMBA bulk RNA-sequencing data and see where it maps to along PC1.
+I have visualised this below both as PCA plot as well as along the timeline.
+```{r, message=FALSE, warning=FALSE}
+# ReDo the PCA on all samples # and switch to ENSMBL IDs
+sce.sum <- aggregateAcrossCells(sce,
+		      id=DataFrame(Condition=sce$Condition))
+rownames(sce.sum) <- rowData(sce.sum)$ID
+#Remove genes that are not in the DMBA data
+rmgenes <- setdiff(rownames(sce.sum),rownames(counts)) # 71
+sce.sum <- sce.sum[!rownames(sce.sum) %in% rmgenes,]
+
+library(edgeR)
+y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+y <- calcNormFactors(y)
+logcpm <- cpm(y,log=TRUE)
+# 
+cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
+#
+pcs <- prcomp(t(cor.logcpm))
+```
+
+```{r, message=FALSE, warning=FALSE}
+# 1. Subset bulk RNA data to same genes
+counts <- counts[rownames(cor.logcpm),]
+# Set up DGEList
+y.dmba <- DGEList(counts=counts,samples=pDat)
+# y <- y[,!y$samples$Tumor]
+# Normalize
+y.dmba <- calcNormFactors(y.dmba)
+# Get Log-Cpm
+dmba.logcpm <- cpm(y.dmba,log=TRUE)
+# Predict into previous PC space
+pcpredict <- predict(pcs,t(dmba.logcpm))
+res <- y.dmba$samples[,c("Sample","Timepoint","Tumor")]
+res$PC1 <- pcpredict[,1]
+res$PC2 <- pcpredict[,2]
+colnames(res)[1] <- "Condition"
+fplot <- data.frame("Condition"=y$samples$Condition,
+		    "Tumor"=grepl("TM",y$samples$Condition),
+		    "Timepoint"=y$samples$Age,
+		    "PC1"=pcs$x[,"PC1"],
+		    "PC2"=pcs$x[,"PC2"],
+		    "Experiment"="WKBR")
+res$Experiment <- "DMBA"
+
+
+fplot <- rbind(fplot,res)
+
+minpc1 <- min(fplot[fplot$Experiment=="WKBR","PC1"])
+maxpc1 <- max(fplot[fplot$Experiment=="WKBR","PC1"]-minpc1)
+fplot$ptime <- ((fplot$PC1-minpc1)/maxpc1) * 100
+
+fplot.wkbr <- fplot[fplot$Experiment=="WKBR",]
+fplot.dmba <- fplot[fplot$Experiment=="DMBA",]
+# fplot.dmba <- left_join(fplot.dmba,res[,c("Condition","Tumor")])
+
+cols <- data.frame("Timepoint"=unique(fplot.dmba$Timepoint))
+cols$col <- plasma(nrow(cols), begin=1, end=0)
+fplot.dmba <- left_join(fplot.dmba,cols)
+fplot.dmba$col[fplot.dmba$Tumor] <- "Red"
+fplot.dmba$Condition <- factor(fplot.dmba$Condition,
+			       levels=fplot.dmba$Condition)
+
+ggplot(fplot.dmba, aes(x=PC1, y=PC2)) +
+     geom_point(data=fplot.wkbr, color="grey80") +
+     geom_point(aes(color=Condition),size=2) +
+     scale_color_manual(values=fplot.dmba$col)
+
+plt <- ggplot(fplot.dmba, aes(x=ptime, y=0)) +
+    geom_segment(aes(x=0, y=0, xend=110, yend=0,
+		     color=NULL),
+		 arrow=arrow(length=unit(0.5, "cm"))) +
+    geom_dotplot(data=fplot.wkbr,fill="grey80", binwidth=1, 
+		 stackgroups=TRUE, binpositions="all", dotsize=1) +
+    geom_dotplot(aes(fill=Condition), binwidth=1, 
+		 stackgroups=TRUE, binpositions="all", dotsize=2) +
+    xlim(0,110) +
+    ylim(0,.5) +
+    xlab("Pseudotime") +
+    scale_fill_manual(values=fplot.dmba$col) +
+    ggtitle("DMBA projected on Inferred Order") +
+    theme(axis.title.y=element_blank(),
+	  axis.line.x=element_blank(),
+	  axis.line.y=element_blank(),
+	  axis.text.y=element_blank(),
+	  legend.position="none",
+	  axis.ticks.y=element_blank(),
+	  axis.ticks.x=element_line(size=1, linetype="solid"),
+	  axis.ticks.length.x=unit(.5,"cm"))
+plt
+```
