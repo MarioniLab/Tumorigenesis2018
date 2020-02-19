@@ -30,6 +30,7 @@ library(irlba)
 library(ggrastr)
 library(reshape2)
 source("functions.R")
+theme_set(theme_cowplot())
 
 dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
@@ -213,7 +214,7 @@ ggplot(sumry, aes(x=as.numeric(tumorTime), ymin=cumfrac-frac, ymax=cumfrac,
     scale_fill_brewer(palette="Paired") +
     xlab("Tumor Development") +
     ylab("Fraction of Cells")
-ggsave("MyeloidFrequency.pdf")
+ggsave("MyeloidFrequency.svg")
 ```
 
 
@@ -278,7 +279,7 @@ plot_grid(p0,p1)
 - Mp2 (right side) has a "cytokine profile", it expresses various cytokines at high levels compared to Mp1
 - Mp1 (left side) has high expression of some genes involved in carbohydrate metabolism. Glycolysis is apparently an effect of macrophage activation, might be worth checking at these genes in more depth.
 ```{r, fig.width=7, fig.height=5, warning=FALSE, message=FALSE}
-
+library(ggrepel)
 ## Option 1
 cells <- pD$barcode[pD$CellType %in% c("Mp1","Mp2")]
 pD.sub <- pD[cells,]
@@ -297,7 +298,7 @@ volcano <- ggplot(res, aes(x=logFC,y=-log.FDR)) +
     geom_text_repel(data=res[1:30,], aes(x=logFC,y=-log.FDR,label=Gene)) +
     ggtitle("Mp2vsMp1")
 
-ggsave("Volcano.pdf",height=7,width=7)
+ggsave("Volcano.svg",height=7,width=7)
 
 
 ## Option 2

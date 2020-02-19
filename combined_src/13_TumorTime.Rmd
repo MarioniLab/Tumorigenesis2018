@@ -13,13 +13,12 @@ output:
 ---
 ***
 
-# The problem
+# How do we define tumorigenesis
 
 We are interested in finding patterns that are associated with tumorigenesis.
-For this we need to have a (per-sample) covariate that represents the process of tumorigenesis to a certain extent
-The only one we have is the age of the animal.
+For this we need to have a (per-sample) covariate that represents the process of tumorigenesis, however, the only one we have is the age of the animal.
 Despite being highly correlated with the onset of tumorigenesis, the variability in latency would confound the analysis.
-Hence, we want to estimate some sort of "biological time", potentially from the data.
+Hence, we want to estimate some sort of "biological time", ideally directly from the data.
 
 ```{r, message=FALSE, warning=FALSE}
 library(scran)
@@ -39,7 +38,7 @@ theme_set(theme_cowplot())
 
 # Load Data
 sce <- readRDS("../data/combined_Robjects/SCE_final.rds")
-sce <- sce[,!sce$Condition %in% c("CBLA0","CBLA1","CBLA2")]
+sce <- sce[,!sce$Condition %in% c("CBLA0","CBLA1","CBLA2","WKBR76.5b","WKBR76.5e")]
 colnames(sce) <- sce$barcode ### I have to fix this somewhere else
 pD <- data.frame(colData(sce))
 set.seed(42)
@@ -81,13 +80,34 @@ timeplt <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
 timeplt
 ```
 
+# Ideas
+We have mainly discussed to broad ideas.
 
-# Potential Solutions
+#### Based on Expression
 
-## Expression based
+- In this approach we use the expression data directly in a way to derive some per-sample estimate of how close to tumor formation a sample is
+- Advantages
+    + Based on fairly light assumptions
+    + Simple
+    + Easy to interpret
+    + Depending on which method we use you could predict the "tumor stage" of external samples
+- Disadvantages
+    + Potential circularity when interpreting the results
+
+#### Based on Genomic Alterations
+
+- In this approach we first estimate CNAs based on the gene expression and then create a summary statistic that summarizes how "cancerous" the cells already are 
+- Advantages
+    + The "tumor time covariate" will be more independent from the data that will actually be analysed downstream
+- Disadvantages
+    + Not quite clear how to get a meaningful (in terms of "cancerousness") summary of CNA profiles across multiple cells
+    + Relationship between cancerousness and CNAs not quite clear
+    + Estimation of CNA from 10x data not trivial
+
+# Expression based
 In this section I will explore approaches that directly utilize the gene expression to estimate a pseudo-tumor time.
 
-### PCAs {.tabset .tabset-fade}
+## PCAs {.tabset .tabset-fade}
 After having compared PCAs on the various compartments, I found the one on either the whole data or epithelium only the most compelling ones.
 The disadvantage of using a subset is that it might appear biased, however I think it's hard to argue against using all epithelial.
 On the plus side using a subset might make analyses of other subsets independent of this ordering.
@@ -162,32 +182,32 @@ pcs.mye <- getPC(sce.mye)
 p.mye <- plotPC(pcs.mye) + ggtitle("All Myeloid")
 ```
 
-#### All 
+### All 
 ```{r, message=FALSE, warning=FALSE}
 p.all
 ```
 
-#### Epithelial 
+### Epithelial 
 ```{r, message=FALSE, warning=FALSE}
 p.epi
 ```
 
-#### Luminal 
+### Luminal 
 ```{r, message=FALSE, warning=FALSE}
 p.lum
 ```
 
-#### Immune 
+### Immune 
 ```{r, message=FALSE, warning=FALSE}
 p.im
 ```
 
-#### Myeloid 
+### Myeloid 
 ```{r, message=FALSE, warning=FALSE}
 p.mye
 ```
 
-#### All vs Epithelial
+### All vs Epithelial
 This is just to compare all versus epithelial
 ```{r, message=FALSE, warning=FALSE}
 pcs.all <- pcs.all[rownames(pcs.epi),]
@@ -200,7 +220,7 @@ ggplot(pcs.epi, aes(x=PC1, y=PC1All, color=Age, label=Condition)) +
 	    theme_bw() 
 ```
 
-### New Ordering
+## Ordering based on PC1
 ```{r, message=FALSE, warning=FALSE, fig.width=7, fig.height=3.5}
 sumry <- arrange(sumry,Age)
 sumry$Condition <- factor(sumry$Condition,
@@ -262,15 +282,16 @@ timeplt_byCond
 pseudotimeplt_byCond
 ```
 
-### Checks
+# Sanity Checks
 
 There are certain things we can assume should be true if PC1 corresponds to tumor development.
 
 1. It should be positively correlated with age
 2. Similarity to wildtype data should decrease along PC1
 3. The MPA-DMBA timeseries data should be mapped according to time
+4. "Meaningful" loadings in PC1
 
-#### Correlation with Age
+## Correlation with Age
 Animals with higher age on average have a higher PC1 values.
 ```{r, message=FALSE, warning=FALSE}
 cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
@@ -278,13 +299,16 @@ cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
 ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
     geom_point() + 
     xlab("PC1") +
-    ylab("Age [w]") +
-    geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
+    ylab("Age [w]") 
+    #     geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
 ```
 
-#### Similarity to wildtype
+## Similarity to wildtype
+
 Above I have excluded two wildtype samples when computing the PCA.
 I here compute the correlation to the mean of the two wildtype samples and plot it against the PC1 values.
+Correlation might not be the best measure for the similarity, might make sense to take something else.
+
 ```{r, message=FALSE, warning=FALSE}
 sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
 
@@ -310,15 +334,17 @@ pcs.all <- left_join(pcs.all, add)
 
 cr <- round(cor(pcs.all$CorrToWt, pcs.all$PC1),2)
 ggplot(pcs.all, aes(x=PC1, y=CorrToWt)) +
-    geom_point() +
-    geom_text(x=100,y=0.97,label=paste0("Cor: ",cr))
+    geom_point() 
+    #     geom_text(x=100,y=0.97,label=paste0("Cor: ",cr))
 ```
 
-#### MPA-DMBA Data
+## MPA-DMBA Data
+
 I here compare the Brca1 timeline experiment to the DMBA timeline.
 As a reminder in the DMBA timeline we have collected several timepoints during tumor formation after MPA-DMBA treatment.
 The experiment contained untreated (T0), MPA-only (T1) and then animals in two weeks interval up to 10 weeks post last MPA.
 It also contained three tumor in total from group T5 and T6.
+
 ```{r, message=FALSE, warning=FALSE}
 # This is the sample annotation
 pDat <- read.csv("../../LinTracing/LinTracing/DMBATimeline/data/results/SLX-18286.HGCKCDRXX.s_1.contents.csv")
@@ -343,7 +369,7 @@ pDat$TotalReads <- colSums(counts)
 
 # Add Gene Annotation
 library(biomaRt)
-ensembl  <- useMart("ensembl",dataset="mmusculus_gene_ensembl",host="useast.ensembl.org") 
+ensembl  <- useMart("ensembl",dataset="mmusculus_gene_ensembl")#,host="useast.ensembl.org") 
 gene.data <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name'), mart=ensembl)
 gene.data <- gene.data[!is.na(gene.data[,1]),]
 gene.data.extra <- data.frame("ensembl_gene_id"=setdiff(rownames(counts),gene.data$ensembl_gene_id),
@@ -450,4 +476,96 @@ plt <- ggplot(fplot.dmba, aes(x=ptime, y=0)) +
 	  axis.ticks.x=element_line(size=1, linetype="solid"),
 	  axis.ticks.length.x=unit(.5,"cm"))
 plt
+```
+
+## PC1 Loadings
+Finally, we can directly look at the loadings of PC1 to see if the genes with high positive loadings can be related to the process of tumor formation.
+In fact, we see cell division and innate immune response popping up.
+The negative loadings are not so easy to interpret.
+```{r, message=FALSE, warning=FALSE}
+sce.sum <- aggregateAcrossCells(sce,
+		      id=DataFrame(Condition=sce$Condition))
+library(edgeR)
+y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+y <- calcNormFactors(y)
+logcpm <- cpm(y,log=TRUE)
+# 
+cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
+#
+pcs <- prcomp(t(cor.logcpm))
+
+
+ld.pc1 <- pcs$rotation[,1]
+ld.pc1.ord <- ld.pc1[order(ld.pc1,decreasing=FALSE)]
+fp <- data.frame("Gene"=names(ld.pc1.ord),
+		 "Loading"=ld.pc1.ord)
+fp$Index <- c(1:nrow(fp))
+library(ggrepel)
+p.ld <- ggplot(fp, aes(x=Index, y=Loading)) +
+    geom_point(color="grey80") +
+    geom_point(data=fp[abs(fp$Loading)>0.02,],color="black") +
+    geom_text_repel(data=fp[c(1:10,(nrow(fp)-10):nrow(fp)),], aes(label=Gene)) +
+    geom_hline(yintercept=0.02,color="red",lty="dashed") +
+    geom_hline(yintercept=-0.02,color="red",lty="dashed") +
+    ylab("PC1 Loading") +
+    coord_flip()
+
+ps <- ld.pc1[ld.pc1 > 0.02]
+ps <- ps[order(ps,decreasing=TRUE)]
+neg <- ld.pc1[ld.pc1 < -0.02]
+neg <- neg[order(neg)]
+
+topLoads <- list("Positive Loading"=ps, "Negative Loading"=neg)# topGO
+univrs <- names(ld.pc1)
+out <- list()
+
+for (i in seq_along(topLoads)) {
+    gens <- names(topLoads[[i]])
+    subst <- names(topLoads)[[i]]
+    # Gene universe
+    alG <- factor(as.numeric(univrs %in% gens))
+    names(alG) <- univrs
+
+    # ---- GOanalysis ----
+
+    library(topGO)
+    #prepare Data for topGO
+    GO.data <- new("topGOdata", description="Lib GO",ontology="BP", allGenes=alG, 
+		   annot=annFUN.org, mapping="org.Mm.eg.db",
+		   nodeSize=20, ID="symbol")
+    result.classic <- runTest(GO.data, statistic="fisher")
+    res <- GenTable(GO.data, Fisher.classic=result.classic, orderBy="topgoFisher", topNodes=50, numChar=300)
+
+    res$Fisher.classic <- as.numeric(res$Fisher.classic)
+    res$Term <- factor(res$Term, levels=res$Term[order(res$Fisher.classic,decreasing=TRUE)])
+    out[[subst]] <- res[1:5,] %>%  # this only works because they are ordered by fisher classic
+			mutate(hitsPerc=Significant*100/length(gens)) %>% 
+			ggplot(aes(y=hitsPerc, 
+				   x=Term, 
+				   fill=Fisher.classic
+				   )) +
+			    geom_col() +
+			    expand_limits(x=0) +
+			    labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+			    ylim(c(0,15)) +
+			    scale_fill_viridis(begin=1,end=0) +
+			    ggtitle(subst) +
+			    coord_flip()
+}
+
+p.ld
+```
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+out[[1]]
+out[[2]]
+```
+
+# Session Info and Save
+```{r, message=FALSE, warning=FALSE}
+out <- pcs.all[,c("Condition","ptime")]
+write.csv(out,"../data/combined_Robjects/TumorTime.csv")
+sessionInfo()
 ```
