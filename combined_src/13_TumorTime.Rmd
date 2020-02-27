@@ -33,6 +33,7 @@ library(viridis)
 library(knitr)
 library(wesanderson)
 library(DT)
+library(edgeR)
 source("functions.R")
 theme_set(theme_cowplot())
 
@@ -113,32 +114,35 @@ The disadvantage of using a subset is that it might appear biased, however I thi
 On the plus side using a subset might make analyses of other subsets independent of this ordering.
 However, this also only true to a certain extent if we are ignoring potential cross-talk between the signal in the epithelial compartment and the other compartments.
 ```{r, message=FALSE, warning=FALSE}
-getPC <- function(sce) {
+getPC <- function(sce, getPCObject=FALSE) {
     sce.sum <- aggregateAcrossCells(sce,
-			  id=DataFrame(Condition=sce$Condition))
+			  id=DataFrame(Condition=sce$Condition),
+			  use_exprs_values="counts",
+			  average=FALSE)
 
-    library(edgeR)
-    y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+    sce.counts <- counts(sce.sum)
+    y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+    keep <- filterByExpr(y.sce)
+    y.sce <- y.sce[keep,]
+    y.sce <- calcNormFactors(y.sce)
 
-    #     discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower")
-    #     y <- y[,!discarded]
-    #     summary(discarded)
-
-    keep <- filterByExpr(y, group=y$samples$Condition)
-    y <- y[keep,]
-    y <- calcNormFactors(y)
-    logcpm <- cpm(y,log=TRUE)
+    logcpm <- cpm(y.sce, log=TRUE)
     # 
-    cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
+    cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
+    pD <- data.frame(colData(sce.sum))
     #
     pcs <- prcomp(t(cor.logcpm))
     pca <- data.frame(pcs$x)
-    pca[,"Condition"] <- y$samples$Condition
-    pca$Age <- y$samples$Age
-    pca$Batch <- y$samples$Batch
+    pca[,"Condition"] <- pD$Condition
+    pca$Age <- pD$Age
+    pca$Batch <- pD$Batch
     # pca$CellTypes <- y$samples$CellTypes
     rownames(pca) <- pca$Condition
-    return(pca)
+    if (getPCObject) {
+	return(pcs)
+    } else {
+	return(pca)
+    }
 }
 
 plotPC <- function(pca) {
@@ -211,13 +215,13 @@ p.mye
 This is just to compare all versus epithelial
 ```{r, message=FALSE, warning=FALSE}
 pcs.all <- pcs.all[rownames(pcs.epi),]
-pcs.epi$PC1All <- pcs.all$PC1
-ggplot(pcs.epi, aes(x=PC1, y=PC1All, color=Age, label=Condition)) +
-	    geom_text_repel(size=3) +
-	    geom_point(size=2) +
-	    xlab("PC1 Epithelial") +
-	    ylab("PC1 All") +
-	    theme_bw() 
+pcs.all$PC1Epi <- pcs.epi$PC1
+ggplot(pcs.all, aes(x=PC1, y=PC1Epi, color=Age, label=Condition)) +
+    geom_text_repel(size=3) +
+    geom_point(size=2) +
+    xlab("PC1 All") +
+    ylab("PC1 Epithelial") +
+    theme_bw() 
 ```
 
 ## Ordering based on PC1
@@ -254,9 +258,9 @@ theme(axis.title.y=element_blank(),
       axis.ticks.x=element_line(size=1, linetype="solid"),
       axis.ticks.length.x=unit(.5,"cm"))
 
-pcs.all$ptime <- (pcs.all$PC1-min(pcs.all$PC1))/max(pcs.all$PC1-min(pcs.all$PC1)) * 100
+pcs.epi$ptime <- (pcs.epi$PC1-min(pcs.epi$PC1))/max(pcs.epi$PC1-min(pcs.epi$PC1)) * 100
 
-sumry <- left_join(sumry,pcs.all[,c("Condition","ptime")])
+sumry <- left_join(sumry,pcs.epi[,c("Condition","ptime")])
 sumry$Condition <- factor(sumry$Condition,
 			  levels=sumry$Condition)
 pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
@@ -295,9 +299,9 @@ There are certain things we can assume should be true if PC1 corresponds to tumo
 ## Correlation with Age
 Animals with higher age on average have a higher PC1 values.
 ```{r, message=FALSE, warning=FALSE}
-cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
+cr <- round(cor(as.numeric(pcs.epi$Age), pcs.epi$PC1),2)
 
-ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
+ggplot(pcs.epi, aes(x=PC1, y=as.numeric(Age))) +
     geom_point() + 
     xlab("PC1") +
     ylab("Age [w]") 
@@ -314,26 +318,29 @@ Correlation might not be the best measure for the similarity, might make sense t
 sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
 
 sce.sum <- aggregateAcrossCells(sce.full,
-		      id=DataFrame(Condition=sce.full$Condition))
-rm(sce.full)
-library(edgeR)
-y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
+		      id=DataFrame(Condition=sce.full$Condition),
+		      use_exprs_values="counts",
+		      average=FALSE)
 
-keep <- filterByExpr(y, group=y$samples$Condition)
-y <- y[keep,]
-y <- calcNormFactors(y)
-logcpm <- cpm(y,log=TRUE)
+sce.counts <- counts(sce.sum)
+y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+keep <- filterByExpr(y.sce)
+y.sce <- y.sce[keep,]
+y.sce <- calcNormFactors(y.sce)
+logcpm <- cpm(y.sce, log=TRUE)
+cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
+rm(sce.full)
+pD.sum <- data.frame(colData(sce.sum))
 # 
-cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
-colnames(cor.logcpm) <- y$samples$Condition
+colnames(cor.logcpm) <- pD.sum$Condition
 wt.logcpm <- rowMeans(cor.logcpm[,c("CBLA0","CBLA1")])
 wkbrs.logcpm <- cor.logcpm[,grepl("WKBR",colnames(cor.logcpm))]
 cors <- apply(wkbrs.logcpm,2, function(x) cor(wt.logcpm,x))
 add <- data.frame("Condition"=names(cors),
 		  "CorToWT"=cors)
-pcs.all <- left_join(pcs.all, add)
+pcs.epi <- left_join(pcs.epi, add)
 
-ggplot(pcs.all, aes(x=PC1, y=CorToWT)) +
+ggplot(pcs.epi, aes(x=PC1, y=CorToWT)) +
     geom_point() 
 ```
 
@@ -345,40 +352,9 @@ The experiment contained untreated (T0), MPA-only (T1) and then animals in two w
 It also contained three tumor in total from group T5 and T6.
 
 ```{r, message=FALSE, warning=FALSE}
-# This is the sample annotation
-pDat <- read.csv("../../LinTracing/LinTracing/DMBATimeline/data/results/SLX-18286.HGCKCDRXX.s_1.contents.csv")
-pDat$Barcode <- gsub("-","_",pDat$Barcode)
-pDat$Sample <- paste0("S",pDat$Sample)
-pDat$Timepoint <- substring(pDat$Sample,1,2)
-pDat$Timepoint <- gsub("S","T",pDat$Timepoint)
-pDat$Tumor <- pDat$Sample %in% c("S5BT","S5CT","S6DT")
-pDat <- pDat[,c("Barcode","Sample","Timepoint","Tumor")]
-# Read in Counts
-counts <- read.csv("../../LinTracing/LinTracing/DMBATimeline/data/results/CountMatrix.csv",row.names=1)
-counts <- counts[,pDat$Barcode]
-rownames(pDat) <- colnames(counts) <- pDat$Sample
-
-# Move stats to PD
-pDat$Unmapped <- t(counts)[,1]
-pDat$MultiMap <- t(counts)[,2]
-pDat$NoFeat <- t(counts)[,3]
-pDat$Ambiguous <- t(counts)[,4]
-counts <- counts[-c(1:4),]
-pDat$TotalReads <- colSums(counts)
-
-# Add Gene Annotation
-library(biomaRt)
-ensembl  <- useMart("ensembl",dataset="mmusculus_gene_ensembl")#,host="useast.ensembl.org") 
-gene.data <- getBM(attributes=c('ensembl_gene_id', 'external_gene_name'), mart=ensembl)
-gene.data <- gene.data[!is.na(gene.data[,1]),]
-gene.data.extra <- data.frame("ensembl_gene_id"=setdiff(rownames(counts),gene.data$ensembl_gene_id),
-			      "external_gene_name"=NA)
-gene.data <- rbind(gene.data,gene.data.extra)
-gene.data$uniq <- scater::uniquifyFeatureNames(gene.data[,1],gene.data[,2])
-# Love this there are genes that are not in ensembl but are in the alignment
-rownames(gene.data) <- gene.data$ensembl_gene_id
-gene.data <- gene.data[rownames(counts),]
-# rownames(counts) <- gene.data$uniq
+dmba.data <- readRDS("../data/combined_Robjects/DMBA_Bulk.rds")
+pDat <- dmba.data[["pDat"]]
+dmba.counts <- dmba.data[["counts"]]
 kable(table(pDat$Timepoint,pDat$Tumor))
 ```
 
@@ -387,30 +363,31 @@ I then apply the same rotation from the PCA to the DMBA bulk RNA-sequencing data
 I have visualised this below both as PCA plot as well as along the timeline.
 ```{r, message=FALSE, warning=FALSE}
 # ReDo the PCA on all samples # and switch to ENSMBL IDs
-sce.sum <- aggregateAcrossCells(sce,
-		      id=DataFrame(Condition=sce$Condition))
+sce.sum <- aggregateAcrossCells(sce.epi,
+		  id=DataFrame(Condition=sce.epi$Condition),
+		  use_exprs_values=c("counts"),
+		  average=FALSE)
 rownames(sce.sum) <- rowData(sce.sum)$ID
 #Remove genes that are not in the DMBA data
-rmgenes <- setdiff(rownames(sce.sum),rownames(counts)) # 71
+rmgenes <- setdiff(rownames(sce.sum),rownames(dmba.counts)) # 71
 sce.sum <- sce.sum[!rownames(sce.sum) %in% rmgenes,]
+sce.counts <- counts(sce.sum)
+y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+keep <- filterByExpr(y.sce)
+y.sce <- y.sce[keep,]
+y.sce <- calcNormFactors(y.sce)
 
-library(edgeR)
-y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
-keep <- filterByExpr(y, group=y$samples$Condition)
-y <- y[keep,]
-y <- calcNormFactors(y)
-logcpm <- cpm(y,log=TRUE)
+logcpm <- cpm(y.sce, log=TRUE)
 # 
-cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
-#
+cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
 pcs <- prcomp(t(cor.logcpm))
 ```
 
 ```{r, message=FALSE, warning=FALSE}
 # 1. Subset bulk RNA data to same genes
-counts <- counts[rownames(cor.logcpm),]
+dmba.counts <- dmba.counts[rownames(cor.logcpm),]
 # Set up DGEList
-y.dmba <- DGEList(counts=counts,samples=pDat)
+y.dmba <- DGEList(counts=dmba.counts,samples=pDat)
 # y <- y[,!y$samples$Tumor]
 # Normalize
 y.dmba <- calcNormFactors(y.dmba)
@@ -422,9 +399,9 @@ res <- y.dmba$samples[,c("Sample","Timepoint","Tumor")]
 res$PC1 <- pcpredict[,1]
 res$PC2 <- pcpredict[,2]
 colnames(res)[1] <- "Condition"
-fplot <- data.frame("Condition"=y$samples$Condition,
-		    "Tumor"=grepl("TM",y$samples$Condition),
-		    "Timepoint"=y$samples$Age,
+fplot <- data.frame("Condition"=sce.sum$Condition,
+		    "Tumor"=grepl("TM",sce.sum$Condition),
+		    "Timepoint"=sce.sum$Age,
 		    "PC1"=pcs$x[,"PC1"],
 		    "PC2"=pcs$x[,"PC2"],
 		    "Experiment"="WKBR")
@@ -482,18 +459,7 @@ Finally, we can directly look at the loadings of PC1 to see if the genes with hi
 In fact, we see cell division and innate immune response popping up.
 The negative loadings are not so easy to interpret.
 ```{r, message=FALSE, warning=FALSE}
-sce.sum <- aggregateAcrossCells(sce,
-		      id=DataFrame(Condition=sce$Condition))
-library(edgeR)
-y <- DGEList(counts=counts(sce.sum),samples=colData(sce.sum))
-keep <- filterByExpr(y, group=y$samples$Condition)
-y <- y[keep,]
-y <- calcNormFactors(y)
-logcpm <- cpm(y,log=TRUE)
-# 
-cor.logcpm <- removeBatchEffect(logcpm, batch=y$samples$Batch)
-#
-pcs <- prcomp(t(cor.logcpm))
+pcs <- getPC(sce, getPCObject=TRUE)
 
 
 ld.pc1 <- pcs$rotation[,1]
@@ -568,8 +534,8 @@ Shila suggested that possibly as the animals get closer to tumorigenesis the ove
 Possibly due to the emergence of new celltypes and/or more variability in existing celltypes
 ```{r, message=FALSE, warning=FALSE}
 outvr <- data.frame()
-for (ptm in pcs.all$ptime) {
-    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
+for (ptm in pcs.epi$ptime) {
+    cond <- pcs.epi$Condition[pcs.epi$ptime==ptm]
     cells <- colnames(sce)[sce$Condition==cond]
     sce.sub <- sce[,cells]
     var.dec <- modelGeneVar(sce.sub)
@@ -601,9 +567,9 @@ Note that below I exclude the two tumour samples, as I don't have a definition t
 ```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 
 graphs <- list()
-smps <- pcs.all$ptime[pcs.all$ptime<90]
+smps <- pcs.epi$ptime[pcs.epi$ptime<90]
 for (ptm in smps) {
-    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
+    cond <- pcs.epi$Condition[pcs.epi$ptime==ptm]
     cells <- colnames(sce)[sce$Condition==cond]
     sce.sub <- sce[,cells]
     sce.sub <- sce.sub[,sce.sub$Groups=="Luminal"]
@@ -637,7 +603,7 @@ pD.sub <- data.frame(colData(sce.sub))
 pD.sub$UMAP1 <- ump$layout[,1]
 pD.sub$UMAP2 <- ump$layout[,2]
 
-pD.sub <- left_join(pD.sub, pcs.all[,c("Condition","ptime")])
+pD.sub <- left_join(pD.sub, pcs.epi[,c("Condition","ptime")])
 pD.sub$ptime <- round(pD.sub$ptime,3)
 pD.sub$ptime <- factor(pD.sub$ptime, levels=sort(unique(pD.sub$ptime)))
 
@@ -652,7 +618,7 @@ ggplot(pD.sub, aes(x=UMAP1, y=UMAP2)) +
 
 # Session Info and Save
 ```{r, message=FALSE, warning=FALSE}
-out <- pcs.all[,c("Condition","ptime")]
+out <- pcs.epi[,c("Condition","ptime")]
 write.csv(out,"../data/combined_Robjects/TumorTime.csv")
 sessionInfo()
 ```
