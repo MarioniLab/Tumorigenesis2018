@@ -317,8 +317,8 @@ Correlation might not be the best measure for the similarity, might make sense t
 ```{r, message=FALSE, warning=FALSE}
 sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
 
-sce.sum <- aggregateAcrossCells(sce.full,
-		      id=DataFrame(Condition=sce.full$Condition),
+sce.sum <- aggregateAcrossCells(sce.full[,sce.full$MajorGroups=="Epithelial"],
+		      id=DataFrame(Condition=sce.full[,sce.full$MajorGroups=="Epithelial"]$Condition),
 		      use_exprs_values="counts",
 		      average=FALSE)
 
@@ -459,7 +459,7 @@ Finally, we can directly look at the loadings of PC1 to see if the genes with hi
 In fact, we see cell division and innate immune response popping up.
 The negative loadings are not so easy to interpret.
 ```{r, message=FALSE, warning=FALSE}
-pcs <- getPC(sce, getPCObject=TRUE)
+pcs <- getPC(sce.epi, getPCObject=TRUE)
 
 
 ld.pc1 <- pcs$rotation[,1]
@@ -505,7 +505,7 @@ for (i in seq_along(topLoads)) {
 
     res$Fisher.classic <- as.numeric(res$Fisher.classic)
     res$Term <- factor(res$Term, levels=res$Term[order(res$Fisher.classic,decreasing=TRUE)])
-    out[[subst]] <- res[1:5,] %>%  # this only works because they are ordered by fisher classic
+    out[[subst]] <- res[1:10,] %>%  # this only works because they are ordered by fisher classic
 			mutate(hitsPerc=Significant*100/length(gens)) %>% 
 			ggplot(aes(y=hitsPerc, 
 				   x=Term, 
