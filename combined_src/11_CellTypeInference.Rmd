@@ -113,14 +113,16 @@ plotUMAP(sce, colour_by="Groups", text_by="Cluster")
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 celltypes <- c(1:40)
 celltypes <- paste0("C",celltypes)
+#pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
+#MyUk1 is Cd209hi Dc
 names(celltypes) <- c("Np", "Ec1", "Tc1", "Caf1", "Sc",
-		      "Nk1", "Uk1", "Tam1", "Tm1", "MyUk1",
+		      "Nk1", "Uk1", "Tam1", "Tm1", "Cd209DC",
 		      "Lp", "Av", "Nk2", "Tm2", "Bc1",
-		      "Mp2", "Tc2", "Mp1", "Bc2", "MyUk2",
+		      "Mp2", "Tc2", "Mp1", "Bc2", "DCs",
 		      "Bsl", "Fb1", "Hs", "Bc3", "Fb2",
 		      "HsLpAv", "Tc3", "Tc4", "LpTm", "HsDbl",
 		      "Ec2", "DcCcr7", "Fb3", "Ec3", "Fb4",
-		      "BslBc", "MyUk3", "Fb5", "Tam1", "Fb6")
+		      "BslBc", "pDC", "Fb5", "Tam1", "Fb6")
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
 sort(table(sce$CellTypes), decreasing=TRUE)
 saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
