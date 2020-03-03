@@ -1,0 +1,219 @@
+---
+title: "Cell Calling for pregnancy dataset"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Call Empty Drops
+
+I use the `emptyDrops` package to distinguish cells from backgrounds.
+In the plots the below, the blue line indicates the inflection point and the black one the knee point.
+Most profiles look quite nice, apart from C3 and A2.
+
+```{r, warning=FALSE, message=FALSE}
+library(DropletUtils)
+library(scran)
+library(BiocParallel)
+library(Matrix)
+library(ggplot2)
+library(dplyr)
+library(cowplot)
+theme_set(theme_cowplot())
+
+smps <- list.files("../data/CellRangerOutput/")
+smps <- grep("[0-9]$",smps,value=TRUE)
+fnames <- paste0("../data/CellRangerOutput/",smps,"/raw")
+
+out <- bplapply(fnames, function(fle) {
+    nm <- gsub("../data/CellRangerOutput/|/raw","",fle)
+    sce <- read10xCounts(fle, col.names=TRUE,version="3")
+
+    bcrank <- barcodeRanks(counts(sce))
+
+    # Only showing unique points for plotting speed.
+    uniq <- !duplicated(bcrank$rank)
+    fplot <- data.frame("rank"=bcrank$rank[uniq],
+			"total"=bcrank$total[uniq]) 
+
+    bcplt <- ggplot(fplot, aes(x=rank, y=total)) +
+			geom_point() +
+			scale_x_log10() +
+			scale_y_log10() +
+			geom_hline(yintercept=metadata(bcrank)$inflection,
+				   lty="dashed",color="blue") +
+			geom_hline(yintercept=metadata(bcrank)$knee,
+				   lty="dashed") +
+			ggtitle(nm) +
+			xlab("Barcode Rank") +
+			ylab("Total UMIs")
+
+
+		    #     if (nm=="SampleC3") {
+
+		    #     } else {
+		    niter <- 10000
+		    #     }
+
+    set.seed(42)
+    limit <- 100   
+    e.out <- emptyDrops(counts(sce), lower=limit, niter=niter)
+
+    tbl <- table(Sig=e.out$FDR <= 0.001, Limited=e.out$Limited)
+
+    set.seed(42)
+    all.out <- emptyDrops(counts(sce), lower=limit, test.ambient=TRUE, niter=niter)
+
+    fplot <- data.frame("X"=all.out$PValue[all.out$Total <= limit & all.out$Total > 0])
+
+    histplt <- ggplot(fplot, aes(x=X)) +
+	geom_histogram(bins=20) +
+	xlab("P-Value") +
+	ggtitle(nm) 
+
+    sce <- sce[,which(e.out$FDR<=0.001)]
+    sce$Sample <- nm
+
+    out <- list("SCE"=sce,
+		"BCPLT"=bcplt,
+		"TBL"=tbl,
+		"HISTPLT"=histplt)
+
+    print(paste0("Done with Sample ",nm))
+
+    return(out)
+}, BPPARAM=SerialParam())
+
+scelist <- lapply(out, function(x) x[["SCE"]])
+bcplts <- lapply(out, function(x) x[["BCPLT"]])
+tbls <- lapply(out, function(x) x[["TBL"]])
+histplts <- lapply(out, function(x) x[["HISTPLT"]])
+rm(out)
+```
+
+## Some QC on cell calling
+
+I here include some visualisation of the calling process as a QC step.
+
+### Barcode Plots
+```{r, warning=FALSE, message=FALSE, fig.width=13, fig.height=13}
+plot_grid(plotlist=bcplts)
+```
+
+### P-Value Histograms
+```{r, warning=FALSE, message=FALSE, fig.width=13, fig.height=13}
+plot_grid(plotlist=histplts)
+```
+
+### P-Value limits
+As the P-Values are not computed analytically you might have cells with P-Values that are 'limited' in their precision. If these are called non-significant, they might only be non-significant because of the lack of precision. 
+
+- There are `r sum(unlist(lapply(tbls, function(x) x[1,2]))!=0)` samples that have cells with non-significant P-Values that are limited by the iterations. 
+
+
+# Concatenate 
+I then concatenated all samples into one SCE object.
+
+```{r, warning=FALSE, message=FALSE}
+addSampleID <- function(sce) {
+    smp <- unique(sce$Sample)
+    smp <- substring(smp,7,nchar(smp))
+    bcs <- substring(colnames(sce),1,(nchar(colnames(sce))-1))
+    colnames(sce) <- paste0(bcs,smp)
+    return(sce)
+}
+scelist <- lapply(scelist,addSampleID)
+
+m <- lapply(scelist,counts)
+m <- do.call(cbind,m)
+pD <- lapply(scelist,colData)
+pD <- do.call(rbind,pD)
+pD$barcode <- rownames(pD)
+fD <- lapply(scelist,rowData)
+stopifnot(all(unlist(lapply(fD[-1], function(x) identical(x,fD[[1]])))))
+fD <- fD[[1]]
+```
+
+# Adding some other information to the SCE
+
+I then added some meta data to the columns and row of the SCE.
+
+## Column Data
+```{r, warning=FALSE, message=FALSE}
+# Read in meta data
+meta.b1 <- read.csv("../data/misc/SLX-18206.HKJ5GDMXX.s_2.contents.csv",stringsAsFactors=FALSE)
+meta.b2 <- read.csv("../data/misc/SLX-18386.HL3WKDMXX.s_1.contents.csv",stringsAsFactors=FALSE)
+meta <- rbind(meta.b1,meta.b2)
+meta$Barcode <- substr(meta$Barcode,5,6)
+meta$Condition <- unlist(lapply(strsplit(meta$SampleName,"_"), function(x) x[1]))
+meta$Batch <- ifelse(meta$SampleID %in% c("S13","S14","S15"),"2","1")
+
+# Add more info to phenotype Data
+pD <- data.frame(pD)
+pD <- mutate(pD, SeqID=substr(barcode,18,nchar(barcode))) %>%
+        mutate(SampleID=plyr::mapvalues(SeqID,meta$Barcode,
+				  meta$SampleName)) %>%
+	mutate(Condition=plyr::mapvalues(SampleID,meta$SampleName,
+			     meta$Condition),
+	       Batch=plyr::mapvalues(SampleID,meta$SampleName,
+				     meta$Batch))
+    
+head(pD)
+```
+
+## Feature Data
+
+```{r, warning=FALSE, message=FALSE}
+# Add more info to the feature Data
+mitoGenes <- read.table("../data/misc/MitoGenes.txt")
+
+# Ribosmal genes
+library(biomaRt)
+gos <- c("GO:0003735","G0:0005840","GO:0015935","GO:0015934") # constituents of ribosome
+ensembl  <- useMart("ensembl",dataset="mmusculus_gene_ensembl",host="useast.ensembl.org") # at the time of writing the ensembl.org had issues
+gene.data <- getBM(attributes=c('ensembl_gene_id', 'go_id'), mart=ensembl)
+gene.data <- gene.data[gene.data$go_id %in% gos,]
+
+fD$Ribosomal <- fD$ID %in% gene.data$ensembl_gene_id
+
+#Add ribosomal proteins that have been missed
+fD$Ribosomal <- fD$Ribosomal | grepl("Rpl",fD$Symbol)
+
+# Mitochondrial
+fD$Mitochondrial <- fD$ID %in% mitoGenes$V1
+
+# Keep for hvg
+fD$KeepForHvg <- !(fD$Ribosomal | fD$Mitochondrial)
+
+fD$uniq <- scater::uniquifyFeatureNames(fD$ID,fD$Symbol)
+rownames(fD) <- fD$uniq
+stopifnot(identical(fD$ID,rownames(m)))
+rownames(m) <- fD$uniq
+head(fD)
+```
+
+## Save
+Saving all data (for genes that have a total count higher than 1 accross the dataset)
+```{r, warning=FALSE, message=FALSE}
+sceout <- SingleCellExperiment(assays=list(counts=m),
+			       colData=pD,
+			       rowData=fD)
+sceout <- sceout[,sceout$Condition!="11aOVX"]
+
+keep <- rowSums(counts(sceout))>1
+sceout <- sceout[keep,]
+saveRDS(sceout,file="../data/Robjects/SCE.rds")
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,276 @@
+---
+title: "Pregnancy Time Course Quality Control"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+
+# Load Data
+```{r, message=FALSE}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(viridis)
+library(DT)
+# source("functions.R")
+theme_set(theme_cowplot())
+
+# Load Data
+sce <- readRDS("../data/Robjects/SCE.rds")
+
+m <- counts(sce)
+pD <- data.frame(colData(sce))
+fD <- data.frame(rowData(sce))
+rm(sce)
+
+# I will also shuffle the rows of pD and columns of m for plotting purpose and to prevent any funny effects from the ordering
+set.seed(300)
+pD <- pD[sample(nrow(pD)),]
+m <- m[,pD$barcode]
+pD$Batch <- ifelse(pD$SeqID %in% c("E7","F7","G7"),"2","1")
+```
+
+# Overview
+- This file contains the quality control for both batches of the pregnancy data set.
+- We have sequenced a total of `r length(unique(pD$SampleID))` animals, of which we had 3 per Condition.
+
+```{r, fig.widht=4,fig.height=4}
+pD$Batch <- as.factor(pD$Batch)
+fP <- summarize(group_by(pD,Batch,Condition,SampleID),n=n()) 
+```
+
+# Number of Cells
+- We sequenced slightly more cells than expected, with a total of `r ncol(m)` cells.
+```{r,fig.width=4,fig.height=8}
+fP <- summarize(group_by(pD,Batch,SampleID),n=n())
+ggplot(fP, aes(x=SampleID, y=n)) +
+    geom_bar(stat="identity",fill="black") +
+    facet_wrap(~Batch,scales="free_x",nrow=2) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    xlab("") +
+    ylab("")
+```
+
+# Quality Control
+- Overall we did a good job at sequencing to comparable depths within and across the two batches.
+
+## Library Sizes
+```{r}
+
+# Sequencing Depth and Genes detected
+pD$UmiSums<- colSums(m)
+pD$GenesDetected <- colSums(m!=0)
+genesDetected <- ggplot(pD, aes(x=SeqID,y=GenesDetected,fill=Batch)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of genes detected") +
+    ggtitle("Number of Genes detected") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+LibrarySize <- ggplot(pD, aes(x=SampleID,y=UmiSums,fill=Batch)) +
+    geom_violin(draw_quantiles=0.5)+
+    scale_y_log10() +
+    ylab("Total number of molecules") +
+    ggtitle("Number of Molecules") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+# Cell Viability
+mMito <- m[fD$Mitochondrial,]
+pD$prcntMito <- colSums(mMito)/colSums(m)
+cellViability <- ggplot(pD, aes(x=prcntMito, y=GenesDetected))+
+    geom_hex(bins=50) +
+    xlab("Percentage of mitochondrial reads") +
+    ggtitle("Cell Viability") +
+    facet_wrap(~SampleID) +
+    scale_fill_viridis()
+rm(mMito)
+
+genesDetected
+LibrarySize
+```
+## Viability
+```{r,fig.width=10,fig.height=10}
+cellViability
+```
+
+## Relationship between UmiSums and GenesDetected
+
+- After the intial round of QC I noted that a population of cells that stood out (e.g. in UMAPs) that I could only identify by a substantial lower number of Genes detected for a certain sequencing depth.
+- I will flag and remove them here and will need to investigate later if they are enriched for any particular cell type.
+```{r, message=FALSE}
+# Sequencing Depth and Genes detected
+gDLib <- ggplot(pD, aes(x=log10(UmiSums),y=log10(GenesDetected), color=Condition, shape=Batch)) +
+    geom_point() +
+    geom_smooth(aes(color=NULL, shape=NULL)) +
+    ylab("Total number of genes detected") +
+    xlab("Total number of UMIs") +
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") 
+gDLib
+library(mgcv)
+pD$residDetectionTrend <- gam(log10(GenesDetected) ~ s(log10(UmiSums),bs="cr"),data=pD)$residuals
+```
+
+
+
+## Summary
+```{r}
+sumry <- group_by(pD, SampleID) %>%
+    summarize("Number of cells"=n(),
+	      "Total molecules"=median(UmiSums),
+	      "Genes Detected"=median(GenesDetected))
+kable(sumry,caption="Summary of QC parameters as median")
+```
+
+# QC Filtering 
+## Cell-wise
+
+```{r}
+lib.outlier <- isOutlier(pD$UmiSums,nmads=3,type="both",log=TRUE)
+gd.outlier <- isOutlier(pD$GenesDetected,nmads=3,type="both",log=TRUE)
+mt.outlier <- isOutlier(pD$prcntMito,nmads=3,type="higher")
+trnd.outlier <- isOutlier(pD$residDetectionTrend,nmads=6,type="lower")
+
+pD$PassLibSize <- !lib.outlier
+pD$PassGenesDetected <- !gd.outlier
+pD$PassViability <- !mt.outlier
+pD$PassTrend <- !trnd.outlier
+pD$PassAll <- pD$PassLibSize & pD$PassGenesDetected & pD$PassViability & pD$PassTrend
+
+```
+
+The following filters were applied to remove low quality cells:
+
+- Library size (3 mads from median)
+- Number of Genes detected (3 mads from median)
+- Mitochondrial reads (3 mads from median)
+- In addition I added a filter on the gene detection trend (see above) which was defined as 6 mads from the median residuals of a cubic spline fit
+- Overall a relatively high number of cells is flagged with low viability `r sum(mt.outlier)` which is also due to the use of emptyDrops.
+- The thresholds are as follows :
+    - `r min(pD$UmiSums[!lib.outlier])` for UmiSums,
+    - `r min(pD$GenesDetected[!gd.outlier])` for genes detected
+    - `r max(pD$prcntMito[!mt.outlier])` for viability.
+
+```{r, fig.width=5, fig.height=5, fig.cap="Heatmap visualizing percentage of cells removed by filtering."}
+lsize <- t((table(pD$PassLibSize,pD$SampleID)))
+lsize <- (lsize[,1]/rowSums(lsize))*100
+pdect <- t((table(pD$PassGenesDetected,pD$SampleID)))
+pdect <- (pdect[,1]/rowSums(pdect))*100
+via <- t((table(pD$PassViability,pD$SampleID)))
+via <- (via[,1]/rowSums(via))*100
+trend <- t((table(pD$PassTrend,pD$SampleID)))
+trend <- (trend[,1]/rowSums(trend))*100
+pall <- t((table(pD$PassAll,pD$SampleID)))
+pall <- (pall[,1]/rowSums(pall))*100
+
+ovview <- data.frame("LibSize"=lsize,
+		     "GenesDetected"=pdect,
+		     "Viability"=via,
+		     "Trend"=trend,
+		     "All"=pall)
+
+library(pheatmap)
+pheatmap(ovview,cluster_rows=FALSE,
+	 cluster_cols=FALSE)
+```
+
+```{r}
+kable(round(ovview,1))
+```
+
+## Sanity Check the trend filter
+
+Based on the DE it seems to discard mainly red blood cells, which is fine.
+
+```{r, message=FALSE, trend=FALSE}
+ggplot(pD, aes(x=log10(UmiSums), y=log10(GenesDetected), color=PassTrend)) +
+    geom_point()
+
+lost <- calculateAverage(m[,!pD$PassTrend])
+kept <- calculateAverage(m[,pD$PassTrend])
+
+library(edgeR)
+logged <- cpm(cbind(lost, kept), log=TRUE, prior.count=2)
+logFC <- logged[,1] - logged[,2]
+abundance <- rowMeans(logged)
+fplot <- data.frame("abundance"=abundance,
+		    "logFC"=logFC,
+		    "Name"=names(logFC))
+fplot <- arrange(fplot,desc(abs(logFC)))
+ggplot(fplot, aes(x=abundance, y=logFC)) +
+    geom_point() +
+    geom_label(data=fplot[1:10,], aes(label=Name))
+
+```
+
+## Sanity Check QC overall
+Here we perform DE between discarded and kept cells. Ideally you wouldn't see any marker genes for particular cell types pop up.
+
+- Overall we get rid of RBCs and dead cells, which is what we want.
+```{r, message=FALSE, trend=FALSE}
+lost <- calculateAverage(m[,!pD$PassAll])
+kept <- calculateAverage(m[,pD$PassAll])
+
+logged <- cpm(cbind(lost, kept), log=TRUE, prior.count=2)
+logFC <- logged[,1] - logged[,2]
+abundance <- rowMeans(logged)
+fplot <- data.frame("abundance"=abundance,
+		    "logFC"=logFC,
+		    "Name"=names(logFC))
+fplot <- arrange(fplot,desc(abs(logFC)))
+ggplot(fplot, aes(x=abundance, y=logFC)) +
+    geom_point() +
+    geom_label(data=fplot[1:20,], aes(label=Name))
+```
+
+## Gene-wise
+
+- At this stage I only remove genes without any reads
+```{r}
+keep <- rowSums(m)!=0
+```
+
+## Final data 
+
+- We have data for `r nrow(m[keep,])` genes and `r ncol(m[keep,pD$barcode])` cells
+- Below I just replot the QC plots after filtering.
+```{r}
+pD <- pD[pD$PassAll,]
+m <- m[keep,pD$barcode]
+fD <- fD[keep,]
+genesDetected %+% pD
+LibrarySize %+% pD
+cellViability %+% pD
+```
+
+## Save Data
+
+```{r}
+sceout <- SingleCellExperiment(assays=list(counts=m),
+			       colData=pD,
+			       rowData=fD)
+saveRDS(sceout,file="../data/Robjects/SCE_QC.rds")
+```
+
+## Session Info
+
+```{r}
+sessionInfo()
+```

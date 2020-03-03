@@ -1,0 +1,55 @@
+---
+title: "Tumorigenesis"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+- In this document I just have a first look at the data and check consistency with my previous findings, none of this will be part of the analysis
+
+# Load Data
+```{r, message=FALSE, fig.width=10, fig.height=5}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(viridis)
+library(wesanderson)
+library(DT)
+theme_set(theme_cowplot())
+
+# Load Data
+sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+colnames(sce) <- sce$barcode ### I have to fix this somewhere else
+pD <- data.frame(colData(sce))
+set.seed(42)
+pD <- pD[sample(nrow(pD),nrow(pD)),]
+umps <- read.csv("../data/Robjects/UMAP_corrected.csv")[,-1]
+pD <- left_join(pD,umps[,c("barcode","UMAP1Uncor","UMAP2Uncor","UMAP1","UMAP2")])
+```
+
+# Batch Correction
+
+```{r, message=FALSE, fig.width=10, fig.height=5}
+p0 <- ggplot(pD, aes(x=UMAP1Uncor, y=UMAP2Uncor, color=Batch)) +
+    geom_point() +
+    ggtitle("Uncorrected") +
+    scale_color_manual(values=c("grey50","black"))
+p1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Batch)) +
+    geom_point() +
+    ggtitle("Corrected") +
+    scale_color_manual(values=c("grey50","black"))  
+plot_grid(p0 + theme_void(), p1 + theme_void())
+```
