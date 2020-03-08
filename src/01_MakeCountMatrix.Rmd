@@ -17,7 +17,7 @@ output:
 
 I use the `emptyDrops` package to distinguish cells from backgrounds.
 In the plots the below, the blue line indicates the inflection point and the black one the knee point.
-Most profiles look quite nice, apart from C3 and A2.
+Most profiles look quite nice.
 
 ```{r, warning=FALSE, message=FALSE}
 library(DropletUtils)
@@ -90,12 +90,13 @@ out <- bplapply(fnames, function(fle) {
     print(paste0("Done with Sample ",nm))
 
     return(out)
-}, BPPARAM=SerialParam())
+}, BPPARAM=MulticoreParam(2))
 
 scelist <- lapply(out, function(x) x[["SCE"]])
 bcplts <- lapply(out, function(x) x[["BCPLT"]])
 tbls <- lapply(out, function(x) x[["TBL"]])
 histplts <- lapply(out, function(x) x[["HISTPLT"]])
+gc()
 rm(out)
 ```
 

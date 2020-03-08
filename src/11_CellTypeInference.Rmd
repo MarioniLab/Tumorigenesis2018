@@ -28,7 +28,7 @@ theme_set(theme_cowplot())
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
 
 umap <- read.csv("../data/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../data/Robjects/Clusters.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../data/Robjects/Clusters_w7.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,anno$barcode]
 pD <- data.frame(colData(sce))
@@ -37,63 +37,61 @@ colData(sce) <- DataFrame(pD)
 reducedDim(sce, type="UMAP") <- pD[,c("UMAP1","UMAP2")]
 ```
 
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-pD.c <- pD[pD$Condition=="CTRL",]
-pD.g1 <- pD[pD$Condition=="4.5dG",]
-pD.g2 <- pD[pD$Condition=="9.5dG",]
-pD.g3 <- pD[pD$Condition=="14.5dG",]
-
-p.c <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.c,color="black")
-p.g1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g1,color="black")
-p.g2 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g2,color="black")
-p.g3 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g3,color="black")
-plot_grid(p.c,p.g1,p.g2,p.g3)
-```
 
 # Major Groups
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 # Epithelial
-plotUMAP(sce, colour_by="Condition", text_by="Cluster")
-plotExpression(sce, x="Cluster", features=c("Epcam"))
-epithelial <- c(11,12,14,21,23,26,29,30,36,9)
+plotUMAP(sce, colour_by="Epcam", text_by="Cluster") + ggtitle("Epithelial")
+plotExpression(sce, x="Cluster", features=c("Epcam")) + ggtitle("Epithelial")
+epithelial <- c(46,20,16,2,29,26,27,31,41,36,
+		30,18,34,39,28,38,52) # 52 also has Ptprc
 epiCluster <- paste0("C",epithelial)
 
 # Immune
-plotExpression(sce, x="Condition", features=c("Ptprc"))
-immune <- c(10,13,15,16,17,18,19,20,27,28,3,32,37,39,6,8) # all Ptprc pos, 32 not but is together w myeloid, 30 is ptprc pos but maps w epithelial
-neutros <- c(1) # not ptprc pos but S100a8
-plasma <- c(24) # not ptprc but Jchain
-immuneCluster <- paste0("C",c(immune,neutros,plasma))
-plotUMAP(sce, colour_by="Ptprc", text_by="Cluster")
+plotExpression(sce, x="Cluster", features=c("Ptprc")) + ggtitle("Immune")
+plotUMAP(sce, colour_by="Ptprc", text_by="Cluster") + ggtitle("Immune")
+immune <- c(32,9,24,50,51,10,4,19,
+	    3,49,13,14,43,47,37,
+	    48,
+	    11, # Mast cells CPA3
+	    22) # B-Cells Cd79a
+	    
+#	    52)
+#neutros <- c(1) # not ptprc pos but S100a8
+#plasma <- c(24) # not ptprc but Jchain
+immuneCluster <- paste0("C",c(immune))
 
 # Fibroblasts
-plotUMAP(sce, colour_by="Adgre1", text_by="Cluster")
-plotExpression(sce, x="Cluster", features="Adgre1")
-fibroblasts <- c(22,35,33,38,40,25,4)
+plotUMAP(sce, colour_by="Col1a1", text_by="Cluster")
+plotExpression(sce, x="Cluster", features="Col3a1") + ggtitle("Fibroblasts")
+fibroblasts <- c(15,5,42,55,23,1,25,53,7,35)
+#35 is different to all others
 fibroblastsCluster <- paste0("C",fibroblasts)
-plotExpression(sce, x="Cluster", features=c("Mbp","Mpz"))
-plotExpression(sce, x="Cluster", features="Aldh1a3")
 
 mark <- findMarkers(sce,sce$Cluster,pval.type="all")
-mark.c36 <- mark[["C36"]]
+# mark.c40 <- data.frame(mark[["C40"]])
+mark.c48 <- data.frame(mark[["C48"]])
 
 # Stroma
-# 5 is Schwann Cell (Mbp, Mpz)
+# 8 is Schwann Cell (Mbp, Mpz)
 # 34 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
 # 2,31,34 are endothelium (Emcn)
 # 7 Higd1b,Rgs5,Gm13889, Rgs4 no idea, will label as stroma
 # C30 has weird expression of Ptprc and Epcam, doublets?
 
 # Stroma
-stroma <- c(5,2,31,34,7)
+stroma <- c(33,54,6,# Endothelium # 54 is lymphatic
+	    8, # Schwann 
+	    40, # associates w Endothelium but not sure what it is also has Emcn
+	    17,21, # not sure have Gm13889 and Il6
+	    12, # not sure either maybe damaged?
+	    45, # not sure
+	    44) #could also be immune?
+
+plotExpression(sce, x="Cluster", features=c("Mbp","Mpz")) + ggtitle("Schwann")
+plotExpression(sce, x="Cluster", features=c("Emcn")) + ggtitle("Endothelium")
+plotUMAP(sce, colour_by="Emcn", text_by="Cluster") + ggtitle("Endothelium")
+plotExpression(sce, x="Cluster", features=c("Nts")) + ggtitle("LymphEndo")
 stromaCluster <- paste0("C",stroma)
 
 sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
@@ -103,30 +101,82 @@ sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
 			    rep("Fibroblast",length(fibroblastsCluster)),
 			    rep("Stroma",length(stromaCluster))))
 # Finer Annotation
-lymphoid <- c(15,19,24,6,27,13,3,17,28)
-myeloid <- c(1,32,37,10,20,16,39,8,18)
-basal <- c(21) # 36 seems to be doublet with b-cells or something??!?!
-tumorCells <- c(14,9,29)
-luminal <- c(12,11,26,30,23)
+lymphoid <- c(32,9,24,50,51,10,4,19,22)
+myeloid <- c(3,49,13,14,43,47,37,48,11)
+basal <- c(30,18,34,39,28,38,52)
+luminal <- c(46,20,16,2,29,26,27,31,41,36)
 
 luminal <- paste0("C",luminal)
 basal <- paste0("C",basal)
 myeloid <- paste0("C",myeloid)
 lymphoid <- paste0("C",lymphoid)
-tumorCells <- paste0("C",tumorCells)
-unknown <- "C36"
+# unknown <- "C36"
 
 sce$Groups <- mapvalues(as.character(sce$Cluster),
-		       from=c(lymphoid, myeloid, basal, luminal, tumorCells, fibroblastsCluster, stromaCluster, unknown),
+		       from=c(lymphoid, myeloid, basal, luminal, fibroblastsCluster, stromaCluster),
 		       to=c(rep("Lymphoid",length(lymphoid)),
 			    rep("Myeloid",length(myeloid)),
 			    rep("Basal",length(basal)),
 			    rep("Luminal",length(luminal)),
-			    rep("TumorEpithel",length(tumorCells)),
 			    rep("Fibroblast",length(fibroblastsCluster)),
-			    rep("Stroma",length(stromaCluster)),
-			    rep("Unknown",length(unknown))))
-plotUMAP(sce, colour_by="Groups", text_by="Cluster")
+			    rep("Stroma",length(stromaCluster))))
+			    
+plotUMAP(sce, colour_by="MajorGroups", text_by="Cluster")
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+pD <- data.frame(colData(sce))
+pD.c <- pD[pD$Condition=="CTRL",]
+pD.g1 <- pD[pD$Condition=="4.5dG",]
+pD.g2 <- pD[pD$Condition=="9.5dG",]
+pD.g3 <- pD[pD$Condition=="14.5dG",]
+
+p.c <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(color="grey80") +
+    geom_point(data=pD.c,aes(color=MajorGroups)) +
+    scale_color_brewer(palette="Dark2") +
+    ggtitle("NP") +
+    theme_void()
+p.g1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(color="grey80") +
+    geom_point(data=pD.g1,aes(color=MajorGroups)) +
+    scale_color_brewer(palette="Dark2") +
+    ggtitle("4.5dG") +
+    theme_void()
+p.g2 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(color="grey80") +
+    geom_point(data=pD.g2,aes(color=MajorGroups)) +
+    scale_color_brewer(palette="Dark2") +
+    ggtitle("9.5dG") +
+    theme_void()
+p.g3 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(color="grey80") +
+    geom_point(data=pD.g3,aes(color=MajorGroups)) +
+    scale_color_brewer(palette="Dark2") +
+    ggtitle("14.5dG") +
+    theme_void()
+plot_grid(p.c,p.g1,p.g2,p.g3)
+# ggsave("SplitPlot.pdf",width=10,height=10)
+
+
+# For Walid
+pD$Timepoint <- mapvalues(pD$Condition,
+			  c("CTRL","4.5dG","9.5dG","14.5dG"),
+			  c(0,4.5,9.5,14.5))
+pD$Timepoint <- as.numeric(pD$Timepoint)
+library(viridis)
+ggplot(pD[sample(nrow(pD)),], aes(x=UMAP1, y=UMAP2, color=Timepoint)) +
+    geom_point() +
+    scale_color_viridis(begin=0,end=0.8,option="B")
+# ggsave("UMAPColoredByTime.pdf")
+
+ggplot(pD, aes(x=UMAP1, y=UMAP2,color=Cluster=="C3")) +
+    geom_point() 
+
+ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point() +
+    facet_wrap(~Cluster)
+
 ```
 
 # Cell Type mapping

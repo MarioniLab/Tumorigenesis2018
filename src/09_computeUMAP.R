@@ -27,6 +27,7 @@ pcs <- runPCA(t(logcounts(sce)[hvgs,]),BSPARAM=IrlbaParam(),rank=50)
 # UMAP
 pca.uncor <- pcs$x
 rownames(pca.uncor) <- colnames(sce)
+set.seed(42)
 ump <- umap(pca.uncor, random_state=42)
 out$UMAP1Uncor <- ump$layout[,1]
 out$UMAP2Uncor <- ump$layout[,2]
@@ -36,6 +37,7 @@ igr.uncor <- get_umap_graph(ump)
 # ---- After Correction -----
 m.cor <- readRDS("../data/Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[colnames(sce),]
+set.seed(42)
 ump.cor <- umap(m.cor, random_state=42)
 out$UMAP1 <- ump.cor$layout[,1]
 out$UMAP2 <- ump.cor$layout[,2]

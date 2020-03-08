@@ -16,7 +16,7 @@ igr.cor <- umapgraph[["Corrected"]]
 # ---- Based on UMAP Graph ----
 # Clustering with walktrap on the UMAP graph
 set.seed(42)
-ump.wktrp <- cluster_walktrap(igr.cor, steps=5)
+ump.wktrp <- cluster_walktrap(igr.cor, steps=7)
 cl.ump.wktrp <- paste0("C",ump.wktrp$membership)
 
 
@@ -30,4 +30,5 @@ sce$Cluster <- merged$NewCluster
 # ---- Save ----
 out <- colData(sce)
 out$Cluster <- paste0("C",as.numeric(out$Cluster))
-write.csv(out[,c("barcode","Cluster")],"../data/Robjects/Clusters.csv")
+write.csv(out[,c("barcode","Cluster")],"../data/Robjects/Clusters_stepsize7.csv")
+saveRDS(merged,file="../data/Robjects/MergeObject.rds")

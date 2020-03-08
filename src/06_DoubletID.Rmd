@@ -252,7 +252,7 @@ ggplot(smry, aes(x=medUmi,y=medprcntMito)) +
     geom_point() +
     scale_x_log10() +
     scale_y_log10() +
-    geom_hline(yintercept=0.003) +
+    geom_hline(yintercept=0.005) +
     xlab("Library Size") +
     ylab("Fraction of Mitochondrial Reads")
 ```
@@ -262,7 +262,7 @@ ggplot(smry, aes(x=medUmi,y=medprcntMito)) +
 - I did label cells as "potentially damaged" and will keep that information for further analyses. 
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-cls <- smry[smry$medprcntMito<0.003,"sampClust"]
+cls <- smry[smry$medprcntMito<0.005,"sampClust"]
 smps.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) paste0(x[1],"_",x[2])))
 cls.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) x[3]))
 
