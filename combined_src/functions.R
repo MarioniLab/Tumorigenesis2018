@@ -126,7 +126,7 @@ identify_unclassified<- function(pred.labels,true.labels,train.data,pred.data,se
 }
 
 #Cluster stuff
-mergeCluster <- function(x, clusters, min.DE=20, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
+mergeCluster <- function(x, clusters, min.DE=10, maxRep=20, removeGenes=NULL, merge=TRUE, ...)
 {
     # This function iteratively merges clusters with a number of DE genes less or equal than min.DE
     # Clusters is a factor corresponding with a length equal to ncol(x)
@@ -381,7 +381,7 @@ get_umap_graph <- function(umap_output) {
     # extracts the graph information and outputs a weighted igraph
     dists.knn <- umap_output$knn[["distances"]]
     indx.knn <- umap_output$knn[["indexes"]]
-    m.adj <- Matrix(0, nrow(indx.knn), nrow(indx.knn)) 
+    m.adj <- Matrix(0, nrow=nrow(indx.knn), ncol=nrow(indx.knn), sparse=TRUE) 
     rownames(m.adj) <- colnames(m.adj) <- rownames(indx.knn)
 
     for (i in seq_len(nrow(m.adj))) {

@@ -1,0 +1,129 @@
+---
+title: "Clustering Resolution"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(scater)
+library(plyr)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(cowplot)
+library(Matrix)
+library(irlba)
+source("functions.R")
+
+sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
+
+umap <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../data/combined_Robjects/Clusters.csv",stringsAsFactors=FALSE)[,-1]
+anno <- left_join(umap,clst)
+sce <- sce[,umap$barcode]
+pD <- data.frame(colData(sce))
+pD <- left_join(pD,anno[,c("barcode","UMAP1","UMAP2","Cluster")])
+colData(sce) <- DataFrame(pD)
+reducedDim(sce, type="UMAP") <- pD[,c("UMAP1","UMAP2")]
+```
+
+# Major Groups
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+# Epithelial
+plotUMAP(sce, colour_by="Condition", text_by="Cluster")
+plotExpression(sce, x="Cluster", features=c("Epcam"))
+epithelial <- c(11,12,14,21,23,26,29,30,36,9)
+epiCluster <- paste0("C",epithelial)
+
+# Immune
+plotExpression(sce, x="Condition", features=c("Ptprc"))
+immune <- c(10,13,15,16,17,18,19,20,27,28,3,32,37,39,6,8) # all Ptprc pos, 32 not but is together w myeloid, 30 is ptprc pos but maps w epithelial
+neutros <- c(1) # not ptprc pos but S100a8
+plasma <- c(24) # not ptprc but Jchain
+immuneCluster <- paste0("C",c(immune,neutros,plasma))
+plotUMAP(sce, colour_by="Ptprc", text_by="Cluster")
+
+# Fibroblasts
+plotUMAP(sce, colour_by="Adgre1", text_by="Cluster")
+plotExpression(sce, x="Cluster", features="Adgre1")
+fibroblasts <- c(22,35,33,38,40,25,4)
+fibroblastsCluster <- paste0("C",fibroblasts)
+plotExpression(sce, x="Cluster", features=c("Mbp","Mpz"))
+plotExpression(sce, x="Cluster", features="Aldh1a3")
+
+mark <- findMarkers(sce,sce$Cluster,pval.type="all")
+mark.c36 <- mark[["C36"]]
+
+# Stroma
+# 5 is Schwann Cell (Mbp, Mpz)
+# 34 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
+# 2,31,34 are endothelium (Emcn)
+# 7 Higd1b,Rgs5,Gm13889, Rgs4 no idea, will label as stroma
+# C30 has weird expression of Ptprc and Epcam, doublets?
+
+# Stroma
+stroma <- c(5,2,31,34,7)
+stromaCluster <- paste0("C",stroma)
+
+sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
+		       from=c(epiCluster, immuneCluster, fibroblastsCluster, stromaCluster),
+		       to=c(rep("Epithelial",length(epiCluster)),
+			    rep("Immune",length(immuneCluster)),
+			    rep("Fibroblast",length(fibroblastsCluster)),
+			    rep("Stroma",length(stromaCluster))))
+# Finer Annotation
+lymphoid <- c(15,19,24,6,27,13,3,17,28)
+myeloid <- c(1,32,37,10,20,16,39,8,18)
+basal <- c(21) # 36 seems to be doublet with b-cells or something??!?!
+tumorCells <- c(14,9,29)
+luminal <- c(12,11,26,30,23)
+
+luminal <- paste0("C",luminal)
+basal <- paste0("C",basal)
+myeloid <- paste0("C",myeloid)
+lymphoid <- paste0("C",lymphoid)
+tumorCells <- paste0("C",tumorCells)
+unknown <- "C36"
+
+sce$Groups <- mapvalues(as.character(sce$Cluster),
+		       from=c(lymphoid, myeloid, basal, luminal, tumorCells, fibroblastsCluster, stromaCluster, unknown),
+		       to=c(rep("Lymphoid",length(lymphoid)),
+			    rep("Myeloid",length(myeloid)),
+			    rep("Basal",length(basal)),
+			    rep("Luminal",length(luminal)),
+			    rep("TumorEpithel",length(tumorCells)),
+			    rep("Fibroblast",length(fibroblastsCluster)),
+			    rep("Stroma",length(stromaCluster)),
+			    rep("Unknown",length(unknown))))
+plotUMAP(sce, colour_by="Groups", text_by="Cluster")
+```
+
+# Cell Type mapping
+- This is quite preliminary
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+celltypes <- c(1:40)
+celltypes <- paste0("C",celltypes)
+#pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
+#MyUk1 is Cd209hi Dc
+names(celltypes) <- c("Np", "Ec1", "Tc1", "Caf1", "Sc",
+		      "Nk1", "Uk1", "Tam1", "Tm1", "Cd209DC",
+		      "Lp", "Av", "Nk2", "Tm2", "Bc1",
+		      "Mp2", "Tc2", "Mp1", "Bc2", "DCs",
+		      "Bsl", "Fb1", "Hs", "Bc3", "Fb2",
+		      "HsLpAv", "Tc3", "Tc4", "LpTm", "HsDbl",
+		      "Ec2", "DcCcr7", "Fb3", "Ec3", "Fb4",
+		      "BslBc", "pDC", "Fb5", "Tam1", "Fb6")
+sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
+sort(table(sce$CellTypes), decreasing=TRUE)
+saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
+```

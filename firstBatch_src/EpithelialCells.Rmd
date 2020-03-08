@@ -29,6 +29,7 @@ library(reshape2)
 library(gridExtra)
 library(gridGraphics)
 source("functions.R")
+theme_set(theme_cowplot())
 
 dataList <- readRDS("../data/firstBatch_Robjects/ExpressionList_QC.rds")
 sfs <- read.csv("../data/firstBatch_Robjects/SizeFactors.csv")
