@@ -17,7 +17,7 @@ output:
 
 I use the `emptyDrops` package to distinguish cells from backgrounds.
 In the plots the below, the blue line indicates the inflection point and the black one the knee point.
-Most profiles look quite nice, apart from C3 and A2.
+Most profiles look quite nice, apart from and A2.
 
 ```{r, warning=FALSE, message=FALSE}
 library(DropletUtils)
@@ -57,15 +57,10 @@ out <- bplapply(fnames, function(fle) {
 			ylab("Total UMIs")
 
 
-    if (nm=="SampleC3") {
-	niter <- 100000 
-    } else {
-	niter <- 10000
-    }
-
     set.seed(42)
     limit <- 100   
-    e.out <- emptyDrops(counts(sce), lower=limit, niter=niter)
+    niter <- 10000
+    e.out <- emptyDrops(counts(sce), lower=limit, niters=niter)
 
     tbl <- table(Sig=e.out$FDR <= 0.001, Limited=e.out$Limited)
 
@@ -149,7 +144,8 @@ I then added some meta data to the columns and row of the SCE.
 # Read in meta data
 meta.b1 <- read.csv("../data/misc/SLX-15931.HV5MKBBXX.s_8.contents.csv",stringsAsFactors=FALSE)
 meta.b2 <- read.csv("../data/misc/SLX-18124.HCJKGDRXX.s_1.contents.csv",stringsAsFactors=FALSE)
-meta <- rbind(meta.b1,meta.b2)
+meta.b3 <- read.csv("../data/misc/SLX-19122.HKJ3FDRXX.s_1.contents.csv",stringsAsFactors=FALSE)
+meta <- rbind(meta.b1,meta.b2,meta.b3)
 meta$Sample.name <- gsub("-","",meta$Sample.name) 
 
 # Add more info to phenotype Data
@@ -164,9 +160,11 @@ pD <- mutate(pD, SeqID=substr(barcode,18,nchar(barcode))) %>%
 	       Condition=as.factor(substr(SampleID,1,nchar(SampleID)-1)))
     
 pD$Animal <- gsub("TM|MG","",pD$Animal)
-pD$Batch <- ifelse(pD$Chip=="3",2,1)
+pD$Batch <- plyr::mapvalues(pD$Chip, c("1","2","3","4"),
+			    c(1,1,2,3))
 
 pD$AnimalHadTumor <- pD$Animal %in% c("WKBR61.4d","WKBR75.4b")
+pD$ChlodronateExperiment <- grepl("4$",pD$SeqID)
 head(pD)
 ```
 
