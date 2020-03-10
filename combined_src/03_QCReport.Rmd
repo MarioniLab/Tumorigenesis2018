@@ -36,6 +36,7 @@ sce <- sce[,!sce$ChlodronateExperiment]
 m <- counts(sce)
 pD <- data.frame(colData(sce))
 fD <- data.frame(rowData(sce))
+pD <- droplevels(pD)
 rm(sce)
 
 # I will also shuffle the rows of pD and columns of m for plotting purpose and to prevent any funny effects from the ordering
@@ -155,7 +156,7 @@ kable(sumry,caption="Summary of QC parameters as median")
 ```{r}
 lib.outlier <- isOutlier(pD$UmiSums,nmads=3,type="both",log=TRUE)
 gd.outlier <- isOutlier(pD$GenesDetected,nmads=3,type="both",log=TRUE)
-mt.outlier <- isOutlier(pD$prcntMito,nmads=3,type="higher")
+mt.outlier <- isOutlier(pD$prcntMito,nmads=5,type="higher")
 trnd.outlier <- isOutlier(pD$residDetectionTrend,nmads=6,type="lower")
 
 pD$PassLibSize <- !lib.outlier
@@ -258,9 +259,6 @@ keep <- rowSums(m)!=0
 ```
 
 ## Final data 
-
-- We have data for `r nrow(m[keep,])` genes and `r ncol(m[keep,pD$barcode])` cells
-- Below I just replot the QC plots after filtering.
 ```{r}
 pD <- pD[pD$PassAll,]
 m <- m[keep,pD$barcode]
@@ -269,6 +267,9 @@ genesDetected %+% pD
 LibrarySize %+% pD
 cellViability %+% pD
 ```
+
+- We have data for `r nrow(m)` genes and `r ncol(m)` cells
+- Below I just replot the QC plots after filtering.
 
 ## Save Data
 
