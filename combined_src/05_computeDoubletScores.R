@@ -54,6 +54,6 @@ out <- bplapply(smps, function(smp) {
     out$KNNs <- knn$index
     out <- out[,c("barcode","Cluster","SubUMAP1","SubUMAP2","DbltScore","KNNs")]
     return(out)
-},  BPPARAM=MulticoreParam(4))
+},  BPPARAM=MulticoreParam(3))
 names(out) <- smps
 saveRDS(out,"../data/combined_Robjects/DoubletData.rds")

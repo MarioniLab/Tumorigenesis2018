@@ -39,7 +39,7 @@ theme_set(theme_cowplot())
 
 # Load Data
 sce <- readRDS("../data/combined_Robjects/SCE_final.rds")
-sce <- sce[,!sce$Condition %in% c("CBLA0","CBLA1","CBLA2","WKBR76.5b","WKBR76.5e")]
+sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
 colnames(sce) <- sce$barcode ### I have to fix this somewhere else
 pD <- data.frame(colData(sce))
 set.seed(42)

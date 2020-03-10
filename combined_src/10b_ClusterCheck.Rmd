@@ -66,21 +66,6 @@ Below I will explore the following criteria to make that judgement.
 
 ## UMAP
 
-### Walktrap 3 clustering
-```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
-library(wesanderson)
-ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Walktrap3)) +
-    geom_point() +
-    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD$Walktrap3)),type="continuous")) 
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-library(wesanderson)
-ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point() +
-    facet_wrap(~Walktrap3)
-```
-
 ### Walktrap 4 clustering
 ```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
 library(wesanderson)
@@ -96,7 +81,7 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     facet_wrap(~Walktrap4)
 ```
 
-### Walktrap 5
+### Walktrap 5 clustering
 ```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
 library(wesanderson)
 ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Walktrap5)) +
@@ -111,11 +96,26 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     facet_wrap(~Walktrap5)
 ```
 
+### Walktrap 6
+```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
+library(wesanderson)
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Walktrap6)) +
+    geom_point() +
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD$Walktrap6)),type="continuous")) 
+```
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+library(wesanderson)
+ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point() +
+    facet_wrap(~Walktrap6)
+```
+
 ## Cluster Modularity
 
 ### UMAP Walktrap clustering
 ```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9, cache=TRUE}
-# ratio <- clusterModularity(igr.cor, pD$Walktrap3, as.ratio=TRUE)
+# ratio <- clusterModularity(igr.cor, pD$Walktrap4, as.ratio=TRUE)
 # library(pheatmap)
 # pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
 #          color=colorRampPalette(c("white", "blue"))(100))
@@ -131,7 +131,7 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
 
 ### SNN Louvain clustering
 ```{r, message=FALSE, warning=FALSE, fig.width=9, fig.height=9, cache=TRUE}
-# ratio <- clusterModularity(snn, pD$Walktrap5, as.ratio=TRUE)
+# ratio <- clusterModularity(snn, pD$Walktrap6, as.ratio=TRUE)
 # library(pheatmap)
 # pheatmap(log2(ratio+1), cluster_rows=FALSE, cluster_cols=FALSE,
 #          color=colorRampPalette(c("white", "blue"))(100))
@@ -164,7 +164,7 @@ p2
 ```{r, message=FALSE, fig.width=8, fig.height=8}
 pD.sub <- pD[pD$MajorGroups!="Undetermined",]
 
-conf <- as.matrix(table(pD.sub$CellType,pD.sub$Walktrap3))
+conf <- as.matrix(table(pD.sub$CellType,pD.sub$Walktrap4))
 conf <- t(t(conf)/colSums(conf))
 library(pheatmap)
 pheatmap(conf,
@@ -177,7 +177,7 @@ pheatmap(conf,
 ```{r, message=FALSE, fig.width=8, fig.height=8}
 pD.sub <- pD[pD$MajorGroups!="Undetermined",]
 
-conf <- as.matrix(table(pD.sub$CellType,pD.sub$Walktrap4))
+conf <- as.matrix(table(pD.sub$CellType,pD.sub$Walktrap5))
 conf <- t(t(conf)/colSums(conf))
 library(pheatmap)
 pheatmap(conf,
@@ -190,7 +190,7 @@ pheatmap(conf,
 ```{r, message=FALSE, fig.width=8, fig.height=8}
 pD.sub <- pD[pD$MajorGroups!="Undetermined",]
 
-conf <- as.matrix(table(pD$Walktrap3,pD$Walktrap4))
+conf <- as.matrix(table(pD.sub$CellType,pD.sub$Walktrap6))
 conf <- t(t(conf)/colSums(conf))
 library(pheatmap)
 pheatmap(conf,
@@ -201,22 +201,10 @@ pheatmap(conf,
 ## Detailed Comparison of Myeloid
 ### UMAP Walktrap
 ```{r, message=FALSE, fig.width=8, fig.height=8}
-pD.my <- pD[pD$UMAP1>0 & pD$UMAP1<5 & pD$UMAP2<10 & pD$UMAP2>4,]
+pD.my <- pD[pD$UMAP1>-5 & pD$UMAP1<3 & pD$UMAP2<7 & pD$UMAP2>2.5,]
 pD.my.sub <- pD.my[pD.my$CellType!="Undetermined",]
 pD.my <- droplevels(pD.my)
 
-p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap3)) +
-    geom_point() +
-    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap3)),type="continuous")) 
-
-p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
-    geom_point() +
-    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my.sub$CellType)),type="continuous")) 
-plot_grid(p0,p1)
-```
-
-### SNN Walktrap
-```{r, message=FALSE, fig.width=8, fig.height=8}
 p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap4)) +
     geom_point() +
     scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap4)),type="continuous")) 
@@ -227,11 +215,23 @@ p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
 plot_grid(p0,p1)
 ```
 
-### SNN Louvain
+### SNN Walktrap
 ```{r, message=FALSE, fig.width=8, fig.height=8}
 p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap5)) +
     geom_point() +
     scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap5)),type="continuous")) 
+
+p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
+    geom_point() +
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my.sub$CellType)),type="continuous")) 
+plot_grid(p0,p1)
+```
+
+### SNN Louvain
+```{r, message=FALSE, fig.width=8, fig.height=8}
+p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap6)) +
+    geom_point() +
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap6)),type="continuous")) 
 
 p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
     geom_point() +
@@ -246,9 +246,9 @@ pD.my <- pD[pD$UMAP1>3 & pD$UMAP1<8 & pD$UMAP2<4 & pD$UMAP2>-5,]
 pD.my.sub <- pD.my[pD.my$CellType!="Undetermined",]
 pD.my <- droplevels(pD.my)
 
-p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap3)) +
+p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap4)) +
     geom_point() +
-    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap3)),type="continuous")) 
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap4)),type="continuous")) 
 
 p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
     geom_point() +
@@ -270,9 +270,9 @@ plot_grid(p0,p1)
 
 ### SNN Louvain
 ```{r, message=FALSE, fig.width=8, fig.height=8}
-p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap5)) +
+p0 <- ggplot(pD.my, aes(x=UMAP1, y=UMAP2, color=Walktrap6)) +
     geom_point() +
-    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap5)),type="continuous")) 
+    scale_color_manual(values=wes_palette("FantasticFox1",length(unique(pD.my$Walktrap6)),type="continuous")) 
 
 p1 <- ggplot(pD.my.sub, aes(x=UMAP1, y=UMAP2, color=CellType)) +
     geom_point() +

@@ -14,13 +14,16 @@ sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
 
 sce1 <- sce[,sce$Batch==1]
 sce2 <- sce[,sce$Batch==2]
+sce3 <- sce[,sce$Batch==3]
 
 #  Compute HVGs
 # Compute highly variable genes per batch
 dec.var1 <- modelGeneVar(sce1)
 dec.var2 <- modelGeneVar(sce2)
+dec.var3 <- modelGeneVar(sce3)
+
 # Combine Var
-combVar <- combineVar(dec.var1,dec.var2)
+combVar <- combineVar(dec.var1,dec.var2,dec.var3)
 stopifnot(identical(rownames(combVar),rownames(sce)))
 combVar <- combVar[rowData(sce)$KeepForHvg,]
 hvgs <- getTopHVGs(combVar)
@@ -29,7 +32,7 @@ hvgs <- getTopHVGs(combVar)
 param <- MulticoreParam(workers=4)
 
 set.seed(300)
-mnncor <- batchelor::fastMNN(sce2,sce1,
+mnncor <- batchelor::fastMNN(sce1,sce2,sce3,
 		     BPPARAM=param,
 		     k=20,
 		     d=50,
