@@ -39,7 +39,7 @@ theme_set(theme_cowplot())
 
 # Load Data
 sce <- readRDS("../data/combined_Robjects/SCE_final.rds")
-sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
+# sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
 colnames(sce) <- sce$barcode ### I have to fix this somewhere else
 pD <- data.frame(colData(sce))
 set.seed(42)
@@ -67,7 +67,7 @@ timeplt <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
 		 stackgroups=TRUE, binpositions="all") +
     xlim(25,60) +
     ylim(0,.5) +
-    scale_fill_manual(values=c("grey50","black"))  +
+    scale_fill_manual(values=c("grey20","grey50","black"))  +
     xlab("Age") +
     ggtitle("Timepoints of Collection") +
     theme(axis.title.y=element_blank(),
@@ -171,7 +171,7 @@ pcs.epi <- getPC(sce.epi)
 p.epi <- plotPC(pcs.epi) + ggtitle("All Epithelial")
 
 #Luminal+Tm
-sce.lum <- sce[,sce$CellTypes %in% c("Av","Lp","LpTm","Tm1","Tm2")]
+sce.lum <- sce[,sce$Groups %in% c("Luminal","TumorEpithel")]
 pcs.lum <- getPC(sce.lum)
 p.lum <- plotPC(pcs.lum) + ggtitle("All Luminal")
 
@@ -258,9 +258,10 @@ theme(axis.title.y=element_blank(),
       axis.ticks.x=element_line(size=1, linetype="solid"),
       axis.ticks.length.x=unit(.5,"cm"))
 
-pcs.epi$ptime <- (pcs.epi$PC1-min(pcs.epi$PC1))/max(pcs.epi$PC1-min(pcs.epi$PC1)) * 100
+pcs.all$PC1 <- -pcs.all$PC1
+pcs.all$ptime <- (pcs.all$PC1-min(pcs.all$PC1))/max(pcs.all$PC1-min(pcs.all$PC1)) * 100
 
-sumry <- left_join(sumry,pcs.epi[,c("Condition","ptime")])
+sumry <- left_join(sumry,pcs.all[,c("Condition","ptime")])
 sumry$Condition <- factor(sumry$Condition,
 			  levels=sumry$Condition)
 pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
@@ -299,9 +300,9 @@ There are certain things we can assume should be true if PC1 corresponds to tumo
 ## Correlation with Age
 Animals with higher age on average have a higher PC1 values.
 ```{r, message=FALSE, warning=FALSE}
-cr <- round(cor(as.numeric(pcs.epi$Age), pcs.epi$PC1),2)
+cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
 
-ggplot(pcs.epi, aes(x=PC1, y=as.numeric(Age))) +
+ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
     geom_point() + 
     xlab("PC1") +
     ylab("Age [w]") 
@@ -317,8 +318,8 @@ Correlation might not be the best measure for the similarity, might make sense t
 ```{r, message=FALSE, warning=FALSE}
 sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
 
-sce.sum <- aggregateAcrossCells(sce.full[,sce.full$MajorGroups=="Epithelial"],
-		      id=DataFrame(Condition=sce.full[,sce.full$MajorGroups=="Epithelial"]$Condition),
+sce.sum <- aggregateAcrossCells(sce.full,
+		      id=DataFrame(Condition=sce.full$Condition),
 		      use_exprs_values="counts",
 		      average=FALSE)
 
@@ -333,14 +334,14 @@ rm(sce.full)
 pD.sum <- data.frame(colData(sce.sum))
 # 
 colnames(cor.logcpm) <- pD.sum$Condition
-wt.logcpm <- rowMeans(cor.logcpm[,c("CBLA0","CBLA1")])
+wt.logcpm <- rowMeans(cor.logcpm[,c("CBLT","CBLA1")])
 wkbrs.logcpm <- cor.logcpm[,grepl("WKBR",colnames(cor.logcpm))]
 cors <- apply(wkbrs.logcpm,2, function(x) cor(wt.logcpm,x))
 add <- data.frame("Condition"=names(cors),
 		  "CorToWT"=cors)
-pcs.epi <- left_join(pcs.epi, add)
+pcs.all <- left_join(pcs.all, add)
 
-ggplot(pcs.epi, aes(x=PC1, y=CorToWT)) +
+ggplot(pcs.all, aes(x=PC1, y=CorToWT)) +
     geom_point() 
 ```
 
@@ -363,8 +364,8 @@ I then apply the same rotation from the PCA to the DMBA bulk RNA-sequencing data
 I have visualised this below both as PCA plot as well as along the timeline.
 ```{r, message=FALSE, warning=FALSE}
 # ReDo the PCA on all samples # and switch to ENSMBL IDs
-sce.sum <- aggregateAcrossCells(sce.epi,
-		  id=DataFrame(Condition=sce.epi$Condition),
+sce.sum <- aggregateAcrossCells(sce,
+		  id=DataFrame(Condition=sce$Condition),
 		  use_exprs_values=c("counts"),
 		  average=FALSE)
 rownames(sce.sum) <- rowData(sce.sum)$ID
@@ -396,13 +397,13 @@ dmba.logcpm <- cpm(y.dmba,log=TRUE)
 # Predict into previous PC space
 pcpredict <- predict(pcs,t(dmba.logcpm))
 res <- y.dmba$samples[,c("Sample","Timepoint","Tumor")]
-res$PC1 <- pcpredict[,1]
+res$PC1 <- -pcpredict[,1]
 res$PC2 <- pcpredict[,2]
 colnames(res)[1] <- "Condition"
 fplot <- data.frame("Condition"=sce.sum$Condition,
 		    "Tumor"=grepl("TM",sce.sum$Condition),
 		    "Timepoint"=sce.sum$Age,
-		    "PC1"=pcs$x[,"PC1"],
+		    "PC1"=-pcs$x[,"PC1"],
 		    "PC2"=pcs$x[,"PC2"],
 		    "Experiment"="WKBR")
 res$Experiment <- "DMBA"
@@ -459,7 +460,7 @@ Finally, we can directly look at the loadings of PC1 to see if the genes with hi
 In fact, we see cell division and innate immune response popping up.
 The negative loadings are not so easy to interpret.
 ```{r, message=FALSE, warning=FALSE}
-pcs <- getPC(sce.epi, getPCObject=TRUE)
+pcs <- getPC(sce, getPCObject=TRUE)
 
 
 ld.pc1 <- pcs$rotation[,1]
@@ -534,8 +535,8 @@ Shila suggested that possibly as the animals get closer to tumorigenesis the ove
 Possibly due to the emergence of new celltypes and/or more variability in existing celltypes
 ```{r, message=FALSE, warning=FALSE}
 outvr <- data.frame()
-for (ptm in pcs.epi$ptime) {
-    cond <- pcs.epi$Condition[pcs.epi$ptime==ptm]
+for (ptm in pcs.all$ptime) {
+    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
     cells <- colnames(sce)[sce$Condition==cond]
     sce.sub <- sce[,cells]
     var.dec <- modelGeneVar(sce.sub)
@@ -567,9 +568,9 @@ Note that below I exclude the two tumour samples, as I don't have a definition t
 ```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 
 graphs <- list()
-smps <- pcs.epi$ptime[pcs.epi$ptime<90]
+smps <- pcs.all$ptime[pcs.all$ptime<90]
 for (ptm in smps) {
-    cond <- pcs.epi$Condition[pcs.epi$ptime==ptm]
+    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
     cells <- colnames(sce)[sce$Condition==cond]
     sce.sub <- sce[,cells]
     sce.sub <- sce.sub[,sce.sub$Groups=="Luminal"]
@@ -603,7 +604,7 @@ pD.sub <- data.frame(colData(sce.sub))
 pD.sub$UMAP1 <- ump$layout[,1]
 pD.sub$UMAP2 <- ump$layout[,2]
 
-pD.sub <- left_join(pD.sub, pcs.epi[,c("Condition","ptime")])
+pD.sub <- left_join(pD.sub, pcs.all[,c("Condition","ptime")])
 pD.sub$ptime <- round(pD.sub$ptime,3)
 pD.sub$ptime <- factor(pD.sub$ptime, levels=sort(unique(pD.sub$ptime)))
 
@@ -618,7 +619,7 @@ ggplot(pD.sub, aes(x=UMAP1, y=UMAP2)) +
 
 # Session Info and Save
 ```{r, message=FALSE, warning=FALSE}
-out <- pcs.epi[,c("Condition","ptime")]
-write.csv(out,"../data/combined_Robjects/TumorTime.csv")
+out <- pcs.all[,c("Condition","ptime")]
+# write.csv(out,"../data/combined_Robjects/TumorTime.csv")
 sessionInfo()
 ```

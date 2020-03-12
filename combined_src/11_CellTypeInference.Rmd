@@ -1,5 +1,5 @@
 ---
-title: "Clustering Resolution"
+title: "Celltype Inference"
 author: "Karsten Bach"
 date: '`r Sys.Date()`'
 output:
@@ -29,7 +29,7 @@ source("functions.R")
 sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
 
 umap <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../data/combined_Robjects/Clusters_w5.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../data/combined_Robjects/Clusters_w6.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,umap$barcode]
 pD <- data.frame(colData(sce))
@@ -39,101 +39,354 @@ reducedDim(sce, type="UMAP") <- pD[,c("UMAP1","UMAP2")]
 ```
 
 # Major Groups
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-# Epithelial
-sce <- make_hexbin(sce, nbins=150,
-		   dimension_reduction="UMAP", use_dims=c(1,2))
-plot_hexbin_gene(sce, type="logcounts", gene="Emcn", 
-		 action="mean", xlab="UMAP1", ylab="UMAP2")
 
+First cells where grouped into four broad categories:
+
+- Epithelial (EpCam+)
+- Immune (Ptprc+)
+- Fibroblasts (Col3a1)
+- Stroma (Various markers)
+```{r, fig.width=9, fig.height=9, warning=FALSE, message=FALSE}
 plotUMAP(sce, colour_by="Condition", text_by="Cluster")
-plotExpression(sce, x="Cluster", features=c("Epcam"))
-epithelial <- c(16,38,35,
-		29,17,22,31,8,
-		37,26,36)
-epiCluster <- paste0("C",epithelial)
+```
 
-# Immune
+## Epithelial
+```{r, fig.width=9, fig.height=9, warning=FALSE, message=FALSE}
+plotUMAP(sce, colour_by="Epcam", text_by="Cluster")
+epithelial <- c(18,15, # Basal
+		2,24,37,21, #Luminal
+		41,3) # Tumor
+epiCluster <- paste0("C",epithelial)
+```
+
+## Immune
+- Most cells marked by Ptprc (Cd45)
+- Neutrophils marked by S100a8
+- Plasma cells Jchain
+- B-Cells Cd19 
+```{r, fig.width=9, fig.height=4, warning=FALSE, message=FALSE}
+immune <- c(4,1,32,6,28,31,10, # Lymphoid
+	    20,13,7,43,19,16,12,38,29,39) # Myeloid
+
 plotExpression(sce, x="Cluster", features=c("Ptprc"))
-immune <- c(15,21,12,33,19,10,34,
-	    6,
-	    28,25,30,27,3,2)# all Ptprc pos 
-neutros <- c(1) # not ptprc pos but S100a8
-plasma <- c(32) # not ptprc but Jchain
-immuneCluster <- paste0("C",c(immune,neutros,plasma))
-plotUMAP(sce, colour_by="Ptprc", text_by="Cluster")
+plotExpression(sce, x="Cluster", features=c("S100a8"))
+neutros <- c(22) # not ptprc pos but S100a8
+plotExpression(sce, x="Cluster", features=c("Jchain"))
+plasma <- c(25) # not ptprc but Jchain
+plotExpression(sce, x="Cluster", features=c("Cd19"))
+bcells <- c(5) # not ptprc but Cd19
+immuneCluster <- paste0("C",c(immune,neutros,plasma,bcells))
+```
 
 # Fibroblasts
-plotUMAP(sce, colour_by="Col3a1", text_by="Cluster")
-fibroblasts <- c(39,20,23,13,24,11,9)
+
+- Mostly marked by Col1a1/Col3a1
+- C23 might be CAFs (pericyte derived? due to their closeness,
+  check paper that we reviewed)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotUMAP(sce, colour_by="Col1a1", text_by="Cluster")
+fibroblasts <- c(14,9,42,30,27,26,
+		 34, # 34 has collagens but a bit funny
+		 23, # 23 has collagens and Tnc
+		 35) # ALso collagens
 fibroblastsCluster <- paste0("C",fibroblasts)
-plotExpression(sce, x="Cluster", features=c("Mbp","Mpz"))
-plotExpression(sce, x="Cluster", features="Aldh1a3")
+```
 
-mark <- findMarkers(sce,sce$Cluster,pval.type="all")
-mark.c9 <- data.frame(mark[["C18"]])
-head(mark.c9,20)
 
+# Stroma
+- Bit more heterogeneous not a single marker
+- C17 Schwann Cell (Mbp, Mpz)
+- All endothelial cells below also have Cdh5
+- C36, C8  endothelial cells (Emcn)
+- C33 lymphatic endothelium (Nts, Lyve1)
+- C40 is also endothelium (Esm1, Podxl)
+- C11 are pericytes (Notch3, Acta2)
+```{r, fig.width=11, fig.height=4, warning=FALSE, message=FALSE}
 # Stroma
 # 5 is Schwann Cell (Mbp, Mpz)
 # 34 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
 # 4,5,7 are endothelium (Emcn)
 # 7 Higd1b,Rgs5,Gm13889, Rgs4 no idea, will label as stroma
 # C14 and 18 are possibly pericytes
+plotExpression(sce, x="Cluster", features=c("Mbp"))
+plotExpression(sce, x="Cluster", features=c("Cdh5"))
+plotExpression(sce, x="Cluster", features=c("Lyve1"))
+plotExpression(sce, x="Cluster", features=c("Esm1"))
+plotExpression(sce, x="Cluster", features=c("Notch3"))
+stroma <- c(17, # Schwann
+	    36,8, # Endothelial
+	    33, #Lymphatic Endothelium
+	    40, # Endothelium
+	    11) # Pericyte
 
-# Stroma
-stroma <- c(4,5,7,
-	    14,18)
 stromaCluster <- paste0("C",stroma)
-
 sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
 		       from=c(epiCluster, immuneCluster, fibroblastsCluster, stromaCluster),
 		       to=c(rep("Epithelial",length(epiCluster)),
 			    rep("Immune",length(immuneCluster)),
 			    rep("Fibroblast",length(fibroblastsCluster)),
 			    rep("Stroma",length(stromaCluster))))
+```
+
+This then results in the following annotation of the larger groups
+
+```{r, fig.width=9, fig.height=9, warning=FALSE, message=FALSE}
+plotUMAP(sce, colour_by="MajorGroups", text_by="Cluster")
+```
+
 # Finer Annotation
-lymphoid <- c(28,25,30,27,3,2,
-	      32,6)
-myeloid <- c(15,21,12,33,19,10,34,1)
-tumorCells <- c(16,38,35)
-luminal <- c(29,17,22,31,8)
-basal <- c(37,26,36)
+
+- Some of the groups can be resolved in smaller sub-compartments
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+tumorCells <- c(41,3)
+luminal <- c(2,24,37,21)
+basal <- c(18,15)
+
+lymphoid <- c(4,1,32,6,28,31,10,
+	      25,5)
+myeloid <- c( 20,13,7,43,19,16,12,38,29,39,
+	     22)# 
 
 luminal <- paste0("C",luminal)
 basal <- paste0("C",basal)
 myeloid <- paste0("C",myeloid)
 lymphoid <- paste0("C",lymphoid)
 tumorCells <- paste0("C",tumorCells)
-
+# 
 sce$Groups <- mapvalues(as.character(sce$Cluster),
-		       from=c(lymphoid, myeloid, basal, luminal, tumorCells, fibroblastsCluster, stromaCluster),
-		       to=c(rep("Lymphoid",length(lymphoid)),
-			    rep("Myeloid",length(myeloid)),
-			    rep("Basal",length(basal)),
-			    rep("Luminal",length(luminal)),
-			    rep("TumorEpithel",length(tumorCells)),
-			    rep("Fibroblast",length(fibroblastsCluster)),
-			    rep("Stroma",length(stromaCluster))))
+			from=c(lymphoid, myeloid, basal, luminal, tumorCells, fibroblastsCluster, stromaCluster),
+			to=c(rep("Lymphoid",length(lymphoid)),
+			     rep("Myeloid",length(myeloid)),
+			     rep("Basal",length(basal)),
+			     rep("Luminal",length(luminal)),
+			     rep("TumorEpithel",length(tumorCells)),
+			     rep("Fibroblast",length(fibroblastsCluster)),
+			     rep("Stroma",length(stromaCluster))))
+```
+
+```{r, fig.width=9, fig.height=9, warning=FALSE, message=FALSE}
 plotUMAP(sce, colour_by="Groups", text_by="Cluster")
+ggsave("UMAP_colBy_Groups.pdf",width=10,height=10)
 ```
 
 # Cell Type mapping
-- This is quite preliminary
+- Cell types were inferred based on marker gene expresssion.
+- Most cell types are quite obvious.
+- The fibroblasts are just numbered from Fb1-Fb7, as I am not sure how to label them
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-# celltypes <- c(1:40)
-# celltypes <- paste0("C",celltypes)
+mark <- findMarkers(sce,sce$Cluster,pval.type="all")
+
+celltypes <- c(1:43)
+celltypes <- paste0("C",celltypes)
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
 #MyUk1 is Cd209hi Dc
-# names(celltypes) <- c("Np", "Ec1", "Tc1", "Caf1", "Sc",
-#                       "Nk1", "Uk1", "Tam1", "Tm1", "Cd209DC",
-#                       "Lp", "Av", "Nk2", "Tm2", "Bc1",
-#                       "Mp2", "Tc2", "Mp1", "Bc2", "DCs",
-#                       "Bsl", "Fb1", "Hs", "Bc3", "Fb2",
-#                       "HsLpAv", "Tc3", "Tc4", "LpTm", "HsDbl",
-#                       "Ec2", "DcCcr7", "Fb3", "Ec3", "Fb4",
-#                       "BslBc", "pDC", "Fb5", "Tam1", "Fb6")
-# sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
-# sort(table(sce$CellTypes), decreasing=TRUE)
+names(celltypes) <- c("Tc.Cd8.1", "Hs", "Tm1", "Nk", "Bc",
+		      "Tc.Cd8.2", "Mp1", "Ec1", "Fb1", "Ilc2?",
+		      "Peryc", "Dc209", "Tam1", "Fb2", "Bsl2",
+		      "Dcs?", "Swc", "Bsl1", "Mp2", "Tam2",
+		      "Lp", "Np", "Caf1?", "LIntBsl", "Pc",
+		      "Fb3", "Fb4", "Tc.Cd8.3", "Dc.Ccr7", "Fb5",
+		      "Tc.Th2?", "Tc.Th17?", "LyEc", "Uk?", "Fb6",
+		      "Ec2", "Av", "pDC", "BasoGata2", "Ec3",
+		      "Tm2","Fb7","MyUk3?")
+sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
+sort(table(sce$CellTypes), decreasing=TRUE)
+plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
 saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
+```
+
+# QC Check
+- As this will be the final annotation, I will one last time check that none of the clusters is funny in terms of QC criteria
+
+```{r, fig.width=10, fig.height=3, warning=FALSE, message=FALSE}
+extraQC <- read.csv("../data/combined_Robjects/QC_Part2.csv")[,-1]
+rownames(extraQC) <- extraQC$barcode
+extraQC <- extraQC[sce$barcode,]
+sce$DbltScore <- extraQC$DbltScore
+sce$IsPotDamaged <- extraQC$IsPotDamaged
+
+plotColData(sce, x="CellTypes",y="UmiSums") + scale_y_log10() + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="GenesDetected") + scale_y_log10() + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="prcntMito") + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+```
+
+## Further Doublets
+### Bsl2
+- Has the shape of a doublet cluster and gets high doublet scores
+- Expresses Basal markers and macrophage markers
+- lacks a unique marker
+- Will be removed
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb5")) +
+    geom_point()
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce <- make_hexbin(sce, nbins = 150, 
+    dimension_reduction = "UMAP", use_dims=c(1,2))
+gene_id <-"Krt5"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+
+gene_id <-"Ptprc"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+
+gene_id <-"Cxcl14"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+```
+
+### Fb5
+- Has the shape of a doublet cluster and gets high doublet scores
+- Actually marked by Apod
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb5")) +
+    geom_point()
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+gene_id <-"Apod"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+```
+
+### Fb6
+- Has the shape of a doublet cluster and gets high doublet scores
+- Actually marked by Sfrp5
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb6")) +
+    geom_point()
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+gene_id <-"Sfrp5"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+```
+
+### LyEc
+- high doublet scores
+- Actually marked by Ccl21a
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LIntBsl")) +
+    geom_point()
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+gene_id <-"Ccl21a_ENSMUSG00000094686"
+gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title=paste0("Mean of ", gene_id))
+gg + theme_void()
+```
+
+### LIntBsl
+- a LP/basal state
+- no gene that marks it
+- I will keep this for now
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LIntBsl")) +
+    geom_point()
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$MajorGroups=="Epithelial"]
+mark.sub <- findMarkers(sce.sub,sce.sub$CellTypes,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up")
+head(data.frame(mark.sub[["LIntBsl"]]),10)
+```
+
+## Difficult Clusters
+
+### MyUk3?
+- Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="MyUk3?")) +
+    geom_point()
+```
+
+- Sub Clustering
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$CellTypes=="MyUk3?"]
+m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+m.cor <- m.cor[sce.sub$barcode,]
+
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+plotUMAP(sce.sub)
+set.seed(42)
+igr <- buildSNNGraph(t(m.cor))
+subc <- igraph::cluster_louvain(igr)
+sce.sub$SubCluster <- factor(subc$membership)
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up")
+			
+lapply(mark.sub,head) 
+```
+
+- 1 are T-Cells (Cd3d)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cd3d")
+```
+
+- 2 are monocytes (Plac8 and Ly6c2, according tohttps://www.cell.com/cell-systems/pdf/S2405-4712(19)30029-8.pdf) 
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["2"]]),40)
+plotExpression(sce.sub,x="SubCluster","Plac8")
+```
+
+- 3 are Mast cells (Cpa3, Mcpt4)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cpa3")
+```
+
+- 4 Expresses Epithelial genes (-> Doublet)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Krt8")
+```
+
+
+- 5 are not marked by anything and have low counts will be removed
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["5"]]),5)
+plotExpression(sce.sub,x="SubCluster","Lyve1")
+plotColData(sce.sub, x="SubCluster",y="UmiSums") + scale_y_log10()
+```
+
+- 6 are Mmp12+ Mp (Mp1)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Mmp12")
+```
+
+- 7 are similar to the Tam clusters
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Ms4a7")
+```
+
+- 8 are Eosinophils (Ear2)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Ear2")
+```
+
+- 9 are B-Cells (Mzb1)
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Mzb1")
 ```
