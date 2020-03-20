@@ -192,7 +192,6 @@ names(celltypes) <- c("Tc.Cd8.1", "Hs", "Tm1", "Nk", "Bc",
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
 sort(table(sce$CellTypes), decreasing=TRUE)
 plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
-saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
 ```
 
 # QC Check
@@ -218,7 +217,7 @@ plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(s
 - lacks a unique marker
 - Will be removed
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb5")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Bsl2")) +
     geom_point()
 ```
 
@@ -280,7 +279,7 @@ gg + theme_void()
 - high doublet scores
 - Actually marked by Ccl21a
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LIntBsl")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LyEc")) +
     geom_point()
 ```
 
@@ -295,7 +294,7 @@ gg + theme_void()
 ### LIntBsl
 - a LP/basal state
 - no gene that marks it
-- I will keep this for now
+- I will keep this for now as these might be biological
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LIntBsl")) +
     geom_point()
@@ -320,7 +319,7 @@ ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="MyUk3?"
     geom_point()
 ```
 
-- Sub Clustering
+- Sub Clustering with SNN and louvain
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce.sub <- sce[,sce$CellTypes=="MyUk3?"]
 m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
@@ -328,7 +327,6 @@ m.cor <- m.cor[sce.sub$barcode,]
 
 ump.cor <- umap::umap(m.cor, random_state=42)
 reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
-plotUMAP(sce.sub)
 set.seed(42)
 igr <- buildSNNGraph(t(m.cor))
 subc <- igraph::cluster_louvain(igr)
@@ -338,8 +336,6 @@ mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
 			block=sce.sub$Batch,
 			pval.type="all",
 			direction="up")
-			
-lapply(mark.sub,head) 
 ```
 
 - 1 are T-Cells (Cd3d)
@@ -389,4 +385,99 @@ plotExpression(sce.sub,x="SubCluster","Ear2")
 - 9 are B-Cells (Mzb1)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 plotExpression(sce.sub,x="SubCluster","Mzb1")
+```
+
+- This is then all saved in the original sce set
+- I also have to fix the Groups and MajorGroups annotaiton for some of these
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+textra <- sce.sub$barcode[sce.sub$SubCluster=="1"]
+mono <- sce.sub$barcode[sce.sub$SubCluster=="2"]
+mast <- sce.sub$barcode[sce.sub$SubCluster=="3"]
+dbls <- sce.sub$barcode[sce.sub$SubCluster=="4"]
+rms <- sce.sub$barcode[sce.sub$SubCluster=="5"]
+mp1ex <- sce.sub$barcode[sce.sub$SubCluster=="6"]
+tamex <- sce.sub$barcode[sce.sub$SubCluster=="7"]
+eosin <- sce.sub$barcode[sce.sub$SubCluster=="8"]
+bex <- sce.sub$barcode[sce.sub$SubCluster=="9"]
+sce$CellTypes[sce$barcode %in% textra] <- "Tc.1"
+sce$CellTypes[sce$barcode %in% mono] <- "Mcs"
+sce$CellTypes[sce$barcode %in% mast] <- "Mst"
+sce$CellTypes[sce$barcode %in% dbls] <- "Dbls"
+sce$CellTypes[sce$barcode %in% rms] <- "Dmgd"
+sce$CellTypes[sce$barcode %in% mp1ex] <- "Mp1.1"
+sce$CellTypes[sce$barcode %in% tamex] <- "Tam.1"
+sce$CellTypes[sce$barcode %in% eosin] <- "Esn"
+sce$CellTypes[sce$barcode %in% bex] <- "Bcs.1"
+sce$Groups[sce$CellTypes=="Tc.1"] <- "Lymphoid"
+sce$Groups[sce$CellTypes=="Bcs.1"] <- "Lymphoid"
+```
+
+- Clean Up, removing the doublets and damaged cells
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+rmClusters <- c("Dmgd","Dbls","Bsl2")
+sce <- sce[,!sce$CellTypes %in% rmClusters]
+```
+
+- I finally run mergeCluster again as some of the clusters from MyUk? might have wrongly been split from other cells
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+m <- logcounts(sce)
+rmgenes <- rownames(sce)[!rowData(sce)$KeepForHvg]
+merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
+unique(merged$NewCluster)
+```
+
+- This suggests merging Mp1 with Mp1.1, Tc.1 with Tc.Cd8.1 and Mcs with Dcs?
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce$CellTypes[sce$CellTypes %in% c("Mp1.1")] <- "Mp1"
+sce$CellTypes[sce$CellTypes %in% c("Tc.1")] <- "Tc.Cd8.1"
+sce$CellTypes[sce$CellTypes %in% c("Mcs")] <- "Dcs?"
+sce$CellTypes <- factor(sce$CellTypes)
+```
+
+# Defining a color scheme
+```{r, fig.width=10, fig.height=7, warning=FALSE, message=FALSE}
+epithelial <- unique(sce$CellTypes[sce$MajorGroups=="Epithelial"])
+
+library(RColorBrewer)
+col.epithelial <- brewer.pal(n=length(epithelial)+1,name="Blues")[2:(length(epithelial)+1)]
+names(col.epithelial) <- epithelial
+
+myeloid <- unique(sce$CellTypes[sce$Groups=="Myeloid"])
+getPalette <- colorRampPalette(brewer.pal(9, "Oranges"))
+col.myeloid <- getPalette(length(myeloid)+1)[2:(length(myeloid)+1)]
+names(col.myeloid) <- myeloid
+
+lymphoid <- unique(sce$CellTypes[sce$Groups=="Lymphoid"])
+getPalette <- colorRampPalette(brewer.pal(9, "Reds"))
+col.lymphoid <- getPalette(length(lymphoid)+1)[2:(length(lymphoid)+1)]
+names(col.lymphoid) <- lymphoid
+
+fibroblasts <- unique(sce$CellTypes[sce$MajorGroups=="Fibroblast"])
+getPalette <- colorRampPalette(brewer.pal(9, "Greens"))
+col.fibroblasts <- getPalette(length(fibroblasts)+1)[2:(length(fibroblasts)+1)]
+names(col.fibroblasts) <- fibroblasts
+
+stroma <- unique(sce$CellTypes[sce$MajorGroups=="Stroma"])
+col.stroma <- brewer.pal(n=length(stroma)+1,"Greys")[2:(length(stroma)+1)]
+names(col.stroma) <- stroma
+
+colors <- c(col.epithelial, col.myeloid, col.lymphoid, col.fibroblasts,
+	    col.stroma)
+
+groupColors <- c("Blue","Orange","Red","Green","Grey50")
+# names(groupColors) <- c("Epithelial","Myeloid","Lymphoid","Fibroblasts","Stroma")
+# sce$GroupColors <- mapvalues(sce$Groups, names(groupColors), groupColors)
+sce$Colors <- mapvalues(sce$CellTypes, names(colors),colors)
+
+pD <- data.frame(colData(sce))
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
+    geom_point() +
+    scale_color_manual(values=levels(pD$Colors))
+```
+
+# Final Annotation and Save
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
+saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
+sessionInfo()
 ```
