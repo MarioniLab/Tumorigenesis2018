@@ -39,7 +39,7 @@ theme_set(theme_cowplot())
 
 # Load Data
 sce <- readRDS("../data/combined_Robjects/SCE_final.rds")
-# sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
+sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
 colnames(sce) <- sce$barcode ### I have to fix this somewhere else
 pD <- data.frame(colData(sce))
 set.seed(42)
@@ -67,7 +67,7 @@ timeplt <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
 		 stackgroups=TRUE, binpositions="all") +
     xlim(25,60) +
     ylim(0,.5) +
-    scale_fill_manual(values=c("grey20","grey50","black"))  +
+    scale_fill_manual(values=c("grey20","grey60","black"))  +
     xlab("Age") +
     ggtitle("Timepoints of Collection") +
     theme(axis.title.y=element_blank(),
@@ -128,10 +128,9 @@ getPC <- function(sce, getPCObject=FALSE) {
 
     logcpm <- cpm(y.sce, log=TRUE)
     # 
-    cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
     pD <- data.frame(colData(sce.sum))
     #
-    pcs <- prcomp(t(cor.logcpm))
+    pcs <- prcomp(t(logcpm))
     pca <- data.frame(pcs$x)
     pca[,"Condition"] <- pD$Condition
     pca$Age <- pD$Age
@@ -318,7 +317,7 @@ Correlation might not be the best measure for the similarity, might make sense t
 ```{r, message=FALSE, warning=FALSE}
 sce.full <- readRDS("../data/combined_Robjects/SCE_final.rds")
 
-sce.sum <- aggregateAcrossCells(sce.full,
+sce.sum <- aggregateAcrossCells(sce.full,#[,sce$MajorGroups=="Epithelial"],
 		      id=DataFrame(Condition=sce.full$Condition),
 		      use_exprs_values="counts",
 		      average=FALSE)
@@ -329,14 +328,13 @@ keep <- filterByExpr(y.sce)
 y.sce <- y.sce[keep,]
 y.sce <- calcNormFactors(y.sce)
 logcpm <- cpm(y.sce, log=TRUE)
-cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
 rm(sce.full)
 pD.sum <- data.frame(colData(sce.sum))
 # 
-colnames(cor.logcpm) <- pD.sum$Condition
-wt.logcpm <- rowMeans(cor.logcpm[,c("CBLT","CBLA1")])
-wkbrs.logcpm <- cor.logcpm[,grepl("WKBR",colnames(cor.logcpm))]
-cors <- apply(wkbrs.logcpm,2, function(x) cor(wt.logcpm,x))
+colnames(logcpm) <- pD.sum$Condition
+wt.logcpm <- rowMeans(logcpm[,c("CBLT","CBLA1")])
+wkbrs.logcpm <- logcpm[,grepl("WKBR",colnames(logcpm))]
+cors <- apply(wkbrs.logcpm,2, function(x) sum(sqrt((wt.logcpm-x)^2)))
 add <- data.frame("Condition"=names(cors),
 		  "CorToWT"=cors)
 pcs.all <- left_join(pcs.all, add)
@@ -380,13 +378,12 @@ y.sce <- calcNormFactors(y.sce)
 
 logcpm <- cpm(y.sce, log=TRUE)
 # 
-cor.logcpm <- removeBatchEffect(as.matrix(logcpm), batch=sce.sum$Batch)
-pcs <- prcomp(t(cor.logcpm))
+pcs <- prcomp(t(logcpm))
 ```
 
 ```{r, message=FALSE, warning=FALSE}
 # 1. Subset bulk RNA data to same genes
-dmba.counts <- dmba.counts[rownames(cor.logcpm),]
+dmba.counts <- dmba.counts[rownames(logcpm),]
 # Set up DGEList
 y.dmba <- DGEList(counts=dmba.counts,samples=pDat)
 # y <- y[,!y$samples$Tumor]
@@ -506,7 +503,7 @@ for (i in seq_along(topLoads)) {
 
     res$Fisher.classic <- as.numeric(res$Fisher.classic)
     res$Term <- factor(res$Term, levels=res$Term[order(res$Fisher.classic,decreasing=TRUE)])
-    out[[subst]] <- res[1:10,] %>%  # this only works because they are ordered by fisher classic
+    out[[subst]] <- res[1:15,] %>%  # this only works because they are ordered by fisher classic
 			mutate(hitsPerc=Significant*100/length(gens)) %>% 
 			ggplot(aes(y=hitsPerc, 
 				   x=Term, 
@@ -515,7 +512,7 @@ for (i in seq_along(topLoads)) {
 			    geom_col() +
 			    expand_limits(x=0) +
 			    labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
-			    ylim(c(0,15)) +
+			    ylim(c(0,20)) +
 			    scale_fill_viridis(begin=1,end=0) +
 			    ggtitle(subst) +
 			    coord_flip()
@@ -608,8 +605,7 @@ pD.sub <- left_join(pD.sub, pcs.all[,c("Condition","ptime")])
 pD.sub$ptime <- round(pD.sub$ptime,3)
 pD.sub$ptime <- factor(pD.sub$ptime, levels=sort(unique(pD.sub$ptime)))
 
-ggplot(pD.sub, aes(x=UMAP1, y=UMAP2)) +
-    #     geom_hex(bins=30) +
+ggplot(pD.sub, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
     geom_point() +
     facet_wrap(ptime~Batch) 
     #     scale_fill_viridis() 
@@ -617,9 +613,94 @@ ggplot(pD.sub, aes(x=UMAP1, y=UMAP2)) +
     #     ylim(c(-5,2.5))
 ```
 
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+library(schex)
+sce <- make_hexbin(sce, nbins = 100, 
+    dimension_reduction = "UMAP", use_dims=c(1,2))
+
+sce$Ptime <- plyr::mapvalues(sce$Condition,
+		       pcs.all$Condition,
+		       pcs.all$ptime)
+sce$Ptime <- as.numeric(as.character(sce$Ptime))
+plot_hexbin_meta(sce, col="Ptime", 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title="Mean of Pseudotime") +
+    scale_fill_viridis(option="B")
+```
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+sce.sub <- sce[,!grepl("TM",sce$Condition)]
+
+library(schex)
+sce.sub <- make_hexbin(sce.sub, nbins = 150, 
+    dimension_reduction = "UMAP", use_dims=c(1,2))
+
+sce.sub$Ptime <- plyr::mapvalues(sce.sub$Condition,
+		       pcs.all$Condition,
+		       pcs.all$ptime)
+sce.sub$Ptime <- as.numeric(as.character(sce.sub$Ptime))
+plot_hexbin_meta(sce.sub, col="Ptime", 
+    action="mean", xlab="UMAP1", ylab="UMAP2", 
+    title="Mean of Pseudotime (wo Tumors)") +
+    scale_fill_viridis(option="B")
+```
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+library(dplyr)
+# Ribbon plot
+pD <- data.frame(colData(sce))
+# pD <- left_join(pD,pcs.all[,c("Condition","ptime")])
+# colnames(pD)[colnames(pD)=="ptime"] <- "Ptime"
+# pD <- pD[pD$MajorGroups %in% "Fibroblast",]
+pD <- droplevels(pD)
+sumry <- group_by(pD, Ptime, CellTypes) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup() # %>%
+#     mutate(cumfrac=cumsum(frac)) %>%
+#     ungroup()
+
+# ggplot(sumry, aes(x=Ptime, y=frac)) +
+#     geom_point() +
+#     facet_wrap(~CellTypes)
+
+comb <- table(sumry$CellTypes,sumry$Ptime) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypes"=rownames(missing.comb),
+		      "Ptime"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypes),
+				as.character(unique(pD$CellTypes)),
+				as.character(unique(pD$Colors)))
+
+combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypes)))
+names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+sumry$CellTypes <- plyr::mapvalues(as.character(sumry$CellTypes),
+				   as.character(names(combi)),
+				   as.character(combi))
+
+sumry <- arrange(sumry, Ptime, CellTypes) %>%
+    group_by(Ptime) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+ggplot(sumry, aes(x=as.numeric(Ptime), ymin=cumfrac-frac, ymax=cumfrac,
+		  fill=CellTypes)) +
+    geom_ribbon() +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("Tumor Development") +
+    ylab("Fraction of Cells") 
+
+```
+
 # Session Info and Save
 ```{r, message=FALSE, warning=FALSE}
 out <- pcs.all[,c("Condition","ptime")]
-# write.csv(out,"../data/combined_Robjects/TumorTime.csv")
+write.csv(out,"../data/combined_Robjects/TumorTime.csv")
 sessionInfo()
 ```
