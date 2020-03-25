@@ -145,7 +145,7 @@ kable(sumry,caption="Summary of QC parameters as median")
 ```{r}
 lib.outlier <- isOutlier(pD$UmiSums,nmads=3,type="both",log=TRUE)
 gd.outlier <- isOutlier(pD$GenesDetected,nmads=3,type="both",log=TRUE)
-mt.outlier <- isOutlier(pD$prcntMito,nmads=3,type="higher")
+mt.outlier <- isOutlier(pD$prcntMito,nmads=5,type="higher")
 trnd.outlier <- isOutlier(pD$residDetectionTrend,nmads=6,type="lower")
 
 pD$PassLibSize <- !lib.outlier
