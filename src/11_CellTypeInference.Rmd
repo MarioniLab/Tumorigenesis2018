@@ -1,5 +1,5 @@
 ---
-title: "Clustering Resolution"
+title: "CellType Annotation for Pregnancy Timecourse"
 author: "Karsten Bach"
 date: '`r Sys.Date()`'
 output:
@@ -13,6 +13,8 @@ output:
 ---
 ***
 
+This annotation is still a bit rough and mainly aims at removing clusters in which I have low confidence so I can have a meaningful MNN mapping with the other dataset
+
 ```{r, message=FALSE,warning=FALSE}
 library(scran)
 library(scater)
@@ -23,12 +25,13 @@ library(ggplot2)
 library(cowplot)
 library(Matrix)
 library(irlba)
+source("../../Tumorigenesis2018/combined_src/functions.R")
 theme_set(theme_cowplot())
 
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
 
 umap <- read.csv("../data/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../data/Robjects/Clusters_w7.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../data/Robjects/Clusters_stepsize7.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,anno$barcode]
 pD <- data.frame(colData(sce))
@@ -40,59 +43,61 @@ reducedDim(sce, type="UMAP") <- pD[,c("UMAP1","UMAP2")]
 
 # Major Groups
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+pD <- data.frame(colData(sce))
+ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(size=.5) +
+    facet_wrap(~Cluster)
+
 # Epithelial
 plotUMAP(sce, colour_by="Epcam", text_by="Cluster") + ggtitle("Epithelial")
 plotExpression(sce, x="Cluster", features=c("Epcam")) + ggtitle("Epithelial")
-epithelial <- c(46,20,16,2,29,26,27,31,41,36,
-		30,18,34,39,28,38,52) # 52 also has Ptprc
+epithelial <- c(38,42,31,3,34,11,24,22,4,9,47,
+		1,6,39,49,28,40)
 epiCluster <- paste0("C",epithelial)
 
 # Immune
 plotExpression(sce, x="Cluster", features=c("Ptprc")) + ggtitle("Immune")
+plotExpression(sce, x="Cluster", features=c("Cpa3")) + ggtitle("Immune")
+plotExpression(sce, x="Cluster", features=c("Cd79a")) + ggtitle("Immune")
+plotExpression(sce, x="Cluster", features=c("S100a8")) + ggtitle("Immune")
 plotUMAP(sce, colour_by="Ptprc", text_by="Cluster") + ggtitle("Immune")
-immune <- c(32,9,24,50,51,10,4,19,
-	    3,49,13,14,43,47,37,
-	    48,
-	    11, # Mast cells CPA3
-	    22) # B-Cells Cd79a
-	    
-#	    52)
-#neutros <- c(1) # not ptprc pos but S100a8
-#plasma <- c(24) # not ptprc but Jchain
-immuneCluster <- paste0("C",c(immune))
+immune <- c(12,21,26,7,27,30,48,
+	    32,2,37,18,13,51,
+	    33, # Mast cells CPA3
+	    14) # B-Cells Cd79a
+
+neutros <- c(46) # not ptprc pos but S100a8
+immuneCluster <- paste0("C",c(immune,neutros))
 
 # Fibroblasts
 plotUMAP(sce, colour_by="Col1a1", text_by="Cluster")
+plotUMAP(sce, colour_by="Adgre1", text_by="Cluster")
 plotExpression(sce, x="Cluster", features="Col3a1") + ggtitle("Fibroblasts")
-fibroblasts <- c(15,5,42,55,23,1,25,53,7,35)
-#35 is different to all others
+fibroblasts <- c(10,5,41,17,29,16,45,35,43)
 fibroblastsCluster <- paste0("C",fibroblasts)
 
 mark <- findMarkers(sce,sce$Cluster,pval.type="all")
 # mark.c40 <- data.frame(mark[["C40"]])
-mark.c48 <- data.frame(mark[["C48"]])
+
 
 # Stroma
-# 8 is Schwann Cell (Mbp, Mpz)
+# 22 is Schwann Cell (Mbp, Mpz)
 # 34 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
 # 2,31,34 are endothelium (Emcn)
 # 7 Higd1b,Rgs5,Gm13889, Rgs4 no idea, will label as stroma
 # C30 has weird expression of Ptprc and Epcam, doublets?
-
 # Stroma
-stroma <- c(33,54,6,# Endothelium # 54 is lymphatic
-	    8, # Schwann 
-	    40, # associates w Endothelium but not sure what it is also has Emcn
-	    17,21, # not sure have Gm13889 and Il6
-	    12, # not sure either maybe damaged?
-	    45, # not sure
-	    44) #could also be immune?
-
-plotExpression(sce, x="Cluster", features=c("Mbp","Mpz")) + ggtitle("Schwann")
-plotExpression(sce, x="Cluster", features=c("Emcn")) + ggtitle("Endothelium")
-plotUMAP(sce, colour_by="Emcn", text_by="Cluster") + ggtitle("Endothelium")
-plotExpression(sce, x="Cluster", features=c("Nts")) + ggtitle("LymphEndo")
+stroma <- c(15,36,50,8,# Endothelium # 54 is lymphatic
+	    25, # Schwann 
+	    23,44, # Not sure what these are?!? Might not be stroma
+	    20,19) # Pericytes
 stromaCluster <- paste0("C",stroma)
+
+plotExpression(sce, x="Cluster", features=c("Mpz")) + ggtitle("Schwann")
+plotExpression(sce, x="Cluster", features=c("Emcn")) + ggtitle("Endothelium")
+plotExpression(sce, x="Cluster", features=c("Nts")) + ggtitle("Endothelium")
+plotExpression(sce, x="Cluster", features=c("Notch3")) + ggtitle("Pericytes")
+plotExpression(sce, x="Cluster", features=c("Podxl")) + ggtitle("Pericytes")
 
 sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
 		       from=c(epiCluster, immuneCluster, fibroblastsCluster, stromaCluster),
@@ -101,10 +106,10 @@ sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
 			    rep("Fibroblast",length(fibroblastsCluster)),
 			    rep("Stroma",length(stromaCluster))))
 # Finer Annotation
-lymphoid <- c(32,9,24,50,51,10,4,19,22)
-myeloid <- c(3,49,13,14,43,47,37,48,11)
-basal <- c(30,18,34,39,28,38,52)
-luminal <- c(46,20,16,2,29,26,27,31,41,36)
+myeloid <- c(32,2,37,18,13,51,33)
+lymphoid <- c(12,21,26,7,27,30,48,14)
+basal <- c(1,6,39,49,28,40)
+luminal <- c(38,42,31,3,34,11,24,22,4,9,47)
 
 luminal <- paste0("C",luminal)
 basal <- paste0("C",basal)
@@ -121,7 +126,7 @@ sce$Groups <- mapvalues(as.character(sce$Cluster),
 			    rep("Fibroblast",length(fibroblastsCluster)),
 			    rep("Stroma",length(stromaCluster))))
 			    
-plotUMAP(sce, colour_by="MajorGroups", text_by="Cluster")
+plotUMAP(sce, colour_by="Groups", text_by="Cluster")
 ```
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
@@ -156,7 +161,6 @@ p.g3 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     ggtitle("14.5dG") +
     theme_void()
 plot_grid(p.c,p.g1,p.g2,p.g3)
-# ggsave("SplitPlot.pdf",width=10,height=10)
 
 
 # For Walid
@@ -168,7 +172,6 @@ library(viridis)
 ggplot(pD[sample(nrow(pD)),], aes(x=UMAP1, y=UMAP2, color=Timepoint)) +
     geom_point() +
     scale_color_viridis(begin=0,end=0.8,option="B")
-# ggsave("UMAPColoredByTime.pdf")
 
 ggplot(pD, aes(x=UMAP1, y=UMAP2,color=Cluster=="C3")) +
     geom_point() 
@@ -176,25 +179,139 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2,color=Cluster=="C3")) +
 ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     geom_point() +
     facet_wrap(~Cluster)
-
 ```
 
 # Cell Type mapping
 - This is quite preliminary
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-celltypes <- c(1:40)
+celltypes <- c(1:51)
 celltypes <- paste0("C",celltypes)
+
+mark.c48 <- data.frame(mark[["C47"]])
+head(mark.c48,60)
+
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
 #MyUk1 is Cd209hi Dc
-names(celltypes) <- c("Np", "Ec1", "Tc1", "Caf1", "Sc",
-		      "Nk1", "Uk1", "Tam1", "Tm1", "Cd209DC",
-		      "Lp", "Av", "Nk2", "Tm2", "Bc1",
-		      "Mp2", "Tc2", "Mp1", "Bc2", "DCs",
-		      "Bsl", "Fb1", "Hs", "Bc3", "Fb2",
-		      "HsLpAv", "Tc3", "Tc4", "LpTm", "HsDbl",
-		      "Ec2", "DcCcr7", "Fb3", "Ec3", "Fb4",
-		      "BslBc", "pDC", "Fb5", "Tam1", "Fb6")
+
+names(celltypes) <- c("BslNP", "Dcs?", "Hs", "Avp", "Fb1",#5
+		      "BslG1", "Ilc3", "Ec1", "Avd", "Fb2",#10
+		      "Hsp", "Av", "Mp1b?", "Bcs", "Ec2",#15
+		      "Fb3", "Fb4", "Mp2a?", "Pcs1", "Pcs2",#20
+		      #
+		      "Nk1", "Lp", "Uk1", "LpHsp?", "Swc",#25
+		      "Tc.1Cyl", "Tc.1", "BslG2", "Fb5", "Tc.2",#30
+		      "HsGearly", "Dc209", "Mst", "Hs2", "Fb4",#35
+		      "FbUk?", "Mp2b", "HsCycl?", "BslCycl", "BslG3",#40
+		      #
+		      "Fb5","HsG3","FbUk2?","Uk2","Fb5",#45
+		      "Np","LpDbl?","Ilc3.2","BslTcDbl","Ec3",
+		      "Mp1a")#50
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
 sort(table(sce$CellTypes), decreasing=TRUE)
-saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
+
+```
+
+# QC Check
+- As this will be the final annotation, I will one last time check that none of the clusters is funny in terms of QC criteria
+
+```{r, fig.width=10, fig.height=3, warning=FALSE, message=FALSE}
+extraQC <- read.csv("../data/Robjects/QC_Part2.csv")[,-1]
+rownames(extraQC) <- extraQC$barcode
+extraQC <- extraQC[sce$barcode,]
+sce$DbltScore <- extraQC$DbltScore
+sce$IsPotDamaged <- extraQC$IsPotDamaged
+
+plotColData(sce, x="CellTypes",y="UmiSums") + scale_y_log10() + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="GenesDetected") + scale_y_log10() + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="prcntMito") + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
+```
+
+## C47 is a multiplet
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce, "Krt8", x="Cluster")
+plotExpression(sce, "Krt17", x="Cluster")
+```
+
+## C49 is a multiplet
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce, "Ptprc", x="Cluster")
+plotExpression(sce, "Krt5", x="Cluster")
+sce.sub <- sce[,sce$Cluster %in% c("C1","C6","C28","C40","C39","C49")]
+mark <- findMarkers(sce.sub,sce.sub$Cluster,pval.type="all")
+```
+
+## C41 has more structure
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(pD ,aes(x=UMAP1, y=UMAP2, color=Cluster=="C41")) +
+    geom_point()
+
+sce.sub <- sce[,sce$Cluster=="C41"]
+m.cor <- readRDS("../data/Robjects/CorrectedPCA.rds")
+m.cor <- m.cor[sce.sub$barcode,]
+
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+set.seed(42)
+igr <- buildSNNGraph(t(m.cor))
+subc <- igraph::cluster_fast_greedy(igr)
+sce.sub$SubCluster <- factor(subc$membership)
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up")
+head(data.frame(mark.sub[[3]]),60)
+```
+
+### 2 Non-Fb Subclusters 
+- You see that in the UMAP above and by looking at Col3a1
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Col3a1")
+plotExpression(sce.sub,x="SubCluster","Cd14")
+```
+
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+fb51 <- sce.sub$barcode[sce.sub$SubCluster=="1"]
+fb52 <- sce.sub$barcode[sce.sub$SubCluster=="2"]
+uk3 <- sce.sub$barcode[sce.sub$SubCluster=="3"]
+mono <- sce.sub$barcode[sce.sub$SubCluster=="4"]
+fb53 <- sce.sub$barcode[sce.sub$SubCluster=="5"]
+sce$CellTypes[sce$barcode %in% fb51] <- "Fb5.3"
+sce$CellTypes[sce$barcode %in% fb52] <- "Fb5.1"
+sce$CellTypes[sce$barcode %in% uk3] <- "Fb5.0"
+sce$CellTypes[sce$barcode %in% mono] <- "Mcs"
+sce$CellTypes[sce$barcode %in% fb53] <- "Fb5.2"
+```
+
+- Clean Up, removing the doublets and damaged cells
+- I am also removing Uk1 and Uk2, neither of the clusters express specific markers, have v low count and don't map to anything else in the tumorigenesis set
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+rmClusters <- c("BslTcDbl","LpDbl?","Uk1","Uk2")
+sce <- sce[,!sce$CellTypes %in% rmClusters]
+```
+
+- I finally run mergeCluster again as some clusters might have been wrongly split
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+m <- logcounts(sce)
+rmgenes <- rownames(sce)[!rowData(sce)$KeepForHvg]
+merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes)
+unique(merged$NewCluster)
+sce$CellTypes[sce$barcode %in% uk3] <- "Uk3"
+```
+
+- This suggest merging of Fb2 and Fb5.3
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce$CellTypes[sce$CellTypes=="Fb5.3"] <- "Fb2"
+```
+
+# Final Out
+- Keep in mind that Tc.1 and Tc.2 are highly specific to the CTRL_3 sample, might need double checking
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+colnames(sce) <- sce$barcode
+plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
+saveRDS(sce,file="../data/Robjects/SCE_final.rds")
+write.csv(file="Anno.csv",data.frame(colData(sce))[,c("barcode","CellTypes")])
 ```
