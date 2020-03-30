@@ -195,10 +195,10 @@ head(mark.c48,60)
 
 names(celltypes) <- c("BslNP", "Dcs?", "Hs", "Avp", "Fb1",#5
 		      "BslG1", "Ilc3", "Ec1", "Avd", "Fb2",#10
-		      "Hsp", "Av", "Mp1b?", "Bcs", "Ec2",#15
+		      "Hsp", "Nk1", "Mp1b?", "Bcs", "Ec2",#15
 		      "Fb3", "Fb4", "Mp2a?", "Pcs1", "Pcs2",#20
 		      #
-		      "Nk1", "Lp", "Uk1", "LpHsp?", "Swc",#25
+		      "Nk2", "Lp", "Uk1", "LpHsp?", "Swc",#25
 		      "Tc.1Cyl", "Tc.1", "BslG2", "Fb5", "Tc.2",#30
 		      "HsGearly", "Dc209", "Mst", "Hs2", "Fb4",#35
 		      "FbUk?", "Mp2b", "HsCycl?", "BslCycl", "BslG3",#40
@@ -269,7 +269,7 @@ head(data.frame(mark.sub[[3]]),60)
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 plotExpression(sce.sub,x="SubCluster","Col3a1")
-plotExpression(sce.sub,x="SubCluster","Cd14")
+plotExpression(sce,x="CellTypes","Cd8a")
 ```
 
 
@@ -288,8 +288,14 @@ sce$CellTypes[sce$barcode %in% fb53] <- "Fb5.2"
 
 - Clean Up, removing the doublets and damaged cells
 - I am also removing Uk1 and Uk2, neither of the clusters express specific markers, have v low count and don't map to anything else in the tumorigenesis set
+- I am also removing Tc.1 and Tc.2 which only appear in CTRL_3 and I presume are contaminations from a lymphnode that wasn't removed properly.
+- In addition they express either Ccr7 or Sell(Cd62l) markers for LN T-Cells.
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-rmClusters <- c("BslTcDbl","LpDbl?","Uk1","Uk2")
+tbbl <- table(sce$SampleID,sce$CellTypes)
+tbbl.prop <- round(t(t(tbbl)/colSums(tbbl)) *100,2)
+plotExpression(sce, x="CellTypes", features=c("Sell"))
+plotExpression(sce, x="CellTypes", features=c("Ccr7"))
+rmClusters <- c("BslTcDbl","LpDbl?","Uk1","Uk2","Tc.1","Tc.2")
 sce <- sce[,!sce$CellTypes %in% rmClusters]
 ```
 
@@ -313,5 +319,4 @@ sce$CellTypes[sce$CellTypes=="Fb5.3"] <- "Fb2"
 colnames(sce) <- sce$barcode
 plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
 saveRDS(sce,file="../data/Robjects/SCE_final.rds")
-write.csv(file="Anno.csv",data.frame(colData(sce))[,c("barcode","CellTypes")])
 ```
