@@ -53,9 +53,9 @@ plotUMAP(sce, colour_by="Condition", text_by="Cluster")
 ## Epithelial
 ```{r, fig.width=9, fig.height=9, warning=FALSE, message=FALSE}
 plotUMAP(sce, colour_by="Epcam", text_by="Cluster")
-epithelial <- c(18,15, # Basal
-		2,24,37,21, #Luminal
-		41,3) # Tumor
+epithelial <- c(27,28,16, # Basal
+		8,37,25,13,34, #Luminal
+		1,20) # Tumor
 epiCluster <- paste0("C",epithelial)
 ```
 
@@ -64,17 +64,17 @@ epiCluster <- paste0("C",epithelial)
 - Neutrophils marked by S100a8
 - Plasma cells Jchain
 - B-Cells Cd19 
-```{r, fig.width=9, fig.height=4, warning=FALSE, message=FALSE}
-immune <- c(4,1,32,6,28,31,10, # Lymphoid
-	    20,13,7,43,19,16,12,38,29,39) # Myeloid
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
+immune <- c(2,30,33,40,50,6, # Lymphoid
+	    3,14,17,21,24,26,39,45,47,48,7) # Myeloid
 
 plotExpression(sce, x="Cluster", features=c("Ptprc"))
 plotExpression(sce, x="Cluster", features=c("S100a8"))
-neutros <- c(22) # not ptprc pos but S100a8
+neutros <- c(18) # not ptprc pos but S100a8
 plotExpression(sce, x="Cluster", features=c("Jchain"))
-plasma <- c(25) # not ptprc but Jchain
+plasma <- c(31) # not ptprc but Jchain
 plotExpression(sce, x="Cluster", features=c("Cd19"))
-bcells <- c(5) # not ptprc but Cd19
+bcells <- c(9) # not ptprc but Cd19
 immuneCluster <- paste0("C",c(immune,neutros,plasma,bcells))
 ```
 
@@ -85,39 +85,35 @@ immuneCluster <- paste0("C",c(immune,neutros,plasma,bcells))
   check paper that we reviewed)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 plotUMAP(sce, colour_by="Col1a1", text_by="Cluster")
-fibroblasts <- c(14,9,42,30,27,26,
-		 34, # 34 has collagens but a bit funny
-		 23, # 23 has collagens and Tnc
-		 35) # ALso collagens
+fibroblasts <- c(15,19,23,29,32,35,36,4,42,44,46,49)
 fibroblastsCluster <- paste0("C",fibroblasts)
 ```
 
 
 # Stroma
 - Bit more heterogeneous not a single marker
-- C17 Schwann Cell (Mbp, Mpz)
+- C22 Schwann Cell (Mbp, Mpz)
 - All endothelial cells below also have Cdh5
-- C36, C8  endothelial cells (Emcn)
-- C33 lymphatic endothelium (Nts, Lyve1)
-- C40 is also endothelium (Esm1, Podxl)
+- C11, C12,43,5 cells (Emcn)
+- C41 lymphatic endothelium (Nts, Lyve1)
 - C11 are pericytes (Notch3, Acta2)
-```{r, fig.width=11, fig.height=4, warning=FALSE, message=FALSE}
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
 # Stroma
-# 5 is Schwann Cell (Mbp, Mpz)
-# 34 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
-# 4,5,7 are endothelium (Emcn)
+# 22 is Schwann Cell (Mbp, Mpz)
+# 41 lymphatic endothelium (Nts, # not really Lyve1 but Nts marked the lymphatic endothelium in prev)
+# 11,12,43,5 are endothelium (Emcn)
 # 7 Higd1b,Rgs5,Gm13889, Rgs4 no idea, will label as stroma
-# C14 and 18 are possibly pericytes
+# C10 and 38 are possibly pericytes
 plotExpression(sce, x="Cluster", features=c("Mbp"))
 plotExpression(sce, x="Cluster", features=c("Cdh5"))
 plotExpression(sce, x="Cluster", features=c("Lyve1"))
 plotExpression(sce, x="Cluster", features=c("Esm1"))
+plotExpression(sce, x="Cluster", features=c("Emcn"))
 plotExpression(sce, x="Cluster", features=c("Notch3"))
-stroma <- c(17, # Schwann
-	    36,8, # Endothelial
-	    33, #Lymphatic Endothelium
-	    40, # Endothelium
-	    11) # Pericyte
+stroma <- c(22, # Schwann
+	    11,12,43,5, # Endothelial
+	    41, #Lymphatic Endothelium
+	    10,38) # Pericyte
 
 stromaCluster <- paste0("C",stroma)
 sce$MajorGroups <- mapvalues(as.character(sce$Cluster),
@@ -138,14 +134,12 @@ plotUMAP(sce, colour_by="MajorGroups", text_by="Cluster")
 
 - Some of the groups can be resolved in smaller sub-compartments
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-tumorCells <- c(41,3)
-luminal <- c(2,24,37,21)
-basal <- c(18,15)
+tumorCells <- c(20,1)
+luminal <- c(8,37,25,13,34)
+basal <- c(27,28,16)
 
-lymphoid <- c(4,1,32,6,28,31,10,
-	      25,5)
-myeloid <- c( 20,13,7,43,19,16,12,38,29,39,
-	     22)# 
+lymphoid <- c(2,30,33,40,50,6,31,9)
+myeloid <- c(3,14,17,21,24,26,39,45,47,48,7,18) 
 
 luminal <- paste0("C",luminal)
 basal <- paste0("C",basal)
@@ -172,23 +166,24 @@ ggsave("UMAP_colBy_Groups.pdf",width=10,height=10)
 # Cell Type mapping
 - Cell types were inferred based on marker gene expresssion.
 - Most cell types are quite obvious.
-- The fibroblasts are just numbered from Fb1-Fb7, as I am not sure how to label them
+- The fibroblasts are just numbered from Fb1-Fb10, as I am not sure how to label them
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 mark <- findMarkers(sce,sce$Cluster,pval.type="all")
 
-celltypes <- c(1:43)
+celltypes <- c(1:50)
 celltypes <- paste0("C",celltypes)
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
-#MyUk1 is Cd209hi Dc
-names(celltypes) <- c("Tc.Cd8.1", "Hs", "Tm1", "Nk", "Bc",
-		      "Tc.Cd8.2", "Mp1", "Ec1", "Fb1", "Ilc2?",
-		      "Peryc", "Dc209", "Tam1", "Fb2", "Bsl2",
-		      "Dcs?", "Swc", "Bsl1", "Mp2", "Tam2",
-		      "Lp", "Np", "Caf1?", "LIntBsl", "Pc",
-		      "Fb3", "Fb4", "Tc.Cd8.3", "Dc.Ccr7", "Fb5",
-		      "Tc.Th2?", "Tc.Th17?", "LyEc", "Uk?", "Fb6",
-		      "Ec2", "Av", "pDC", "BasoGata2", "Ec3",
-		      "Tm2","Fb7","MyUk3?")
+names(celltypes) <- c("Tm1","Nk","Mxd?","Fb1","Ec1",
+		      "Tc.Cd8.1","Mp1","Hs","Bc","Peryc",
+		      "Ec2","Ec3","Avp","Dc209","Fb2",
+		      "BslDbl","Tam1","Np","Fb3","Tm2",
+		      "Mp2","Swc","Caf1","Dcs","Lp",
+		      "Tam2","Bsl1","Bsl2","Fb4","Tc.Th2?",
+		      "Pc","Fb5","Tc.Cd8.2","Avd","Fb6",
+		      "Fb7","Dbl?","Peryc","Dc.Ccr7","Ilc2?",
+		      "LyEc","Uk?","Ec3","Fb8","Mst",
+		      "Fb9","pDC","BasoGata2","Fb10","Tc.Cd8.3")
+
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
 sort(table(sce$CellTypes), decreasing=TRUE)
 plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
@@ -211,13 +206,13 @@ plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(s
 ```
 
 ## Further Doublets
-### Bsl2
+### BslDbl
 - Has the shape of a doublet cluster and gets high doublet scores
 - Expresses Basal markers and macrophage markers
 - lacks a unique marker
 - Will be removed
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Bsl2")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="BslDbl")) +
     geom_point()
 ```
 
@@ -243,11 +238,11 @@ gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id,
 gg + theme_void()
 ```
 
-### Fb5
+### Fb6
 - Has the shape of a doublet cluster and gets high doublet scores
 - Actually marked by Apod
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb5")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb6")) +
     geom_point()
 ```
 
@@ -259,11 +254,11 @@ gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id,
 gg + theme_void()
 ```
 
-### Fb6
+### Fb8
 - Has the shape of a doublet cluster and gets high doublet scores
 - Actually marked by Sfrp5
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb6")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb8")) +
     geom_point()
 ```
 
@@ -275,53 +270,46 @@ gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id,
 gg + theme_void()
 ```
 
-### LyEc
-- high doublet scores
-- Actually marked by Ccl21a
+### Fb9
+- Gets high doublet scores
+- Expresses Cd79a and collagens
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LyEc")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Fb9")) +
     geom_point()
 ```
 
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-gene_id <-"Ccl21a_ENSMUSG00000094686"
-gg <- schex::plot_hexbin_gene(sce, type="logcounts", gene=gene_id, 
-    action="mean", xlab="UMAP1", ylab="UMAP2", 
-    title=paste0("Mean of ", gene_id))
-gg + theme_void()
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
+plotExpression(sce, x="CellTypes", features=c("Cd79a"))
+plotExpression(sce, x="CellTypes", features=c("Col3a1"))
 ```
 
-### LIntBsl
-- a LP/basal state
+### Dbl?
+- a luminal basal state
 - no gene that marks it
-- I will keep this for now as these might be biological
+- Very low number of cells, possibly true doublets
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="LIntBsl")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Dbl?")) +
     geom_point()
 ```
 
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-sce.sub <- sce[,sce$MajorGroups=="Epithelial"]
-mark.sub <- findMarkers(sce.sub,sce.sub$CellTypes,
-			block=sce.sub$Batch,
-			pval.type="all",
-			direction="up")
-head(data.frame(mark.sub[["LIntBsl"]]),10)
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
+plotExpression(sce, x="CellTypes", features=c("Krt5"))
+plotExpression(sce, x="CellTypes", features=c("Krt8"))
 ```
 
 ## Difficult Clusters
 
-### MyUk3?
+### Mxd?
 - Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="MyUk3?")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Mxd?")) +
     geom_point()
 ```
 
 - Sub Clustering with SNN and louvain
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-sce.sub <- sce[,sce$CellTypes=="MyUk3?"]
+sce.sub <- sce[,sce$CellTypes=="Mxd?"]
 m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[sce.sub$barcode,]
 
@@ -338,99 +326,105 @@ mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
 			direction="up")
 ```
 
-- 1 are T-Cells (Cd3d)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Cd3d")
-```
-
-- 2 are monocytes (Plac8 and Ly6c2, according tohttps://www.cell.com/cell-systems/pdf/S2405-4712(19)30029-8.pdf) 
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-head(data.frame(mark.sub[["2"]]),40)
+- 1 are monocytes (Plac8 and Ly6c2, according tohttps://www.cell.com/cell-systems/pdf/S2405-4712(19)30029-8.pdf) 
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Ly6c2")
 plotExpression(sce.sub,x="SubCluster","Plac8")
 ```
 
-- 3 are Mast cells (Cpa3, Mcpt4)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Cpa3")
-```
-
-- 4 Expresses Epithelial genes (-> Doublet)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+- 2 Expresses Epithelial genes (-> Doublet)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
 plotExpression(sce.sub,x="SubCluster","Krt8")
 ```
 
-
-- 5 are not marked by anything and have low counts will be removed
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-head(data.frame(mark.sub[["5"]]),5)
-plotExpression(sce.sub,x="SubCluster","Lyve1")
-plotColData(sce.sub, x="SubCluster",y="UmiSums") + scale_y_log10()
+- 3 are B-Cells (Mzb1)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["4"]]),20)
+plotExpression(sce.sub,x="SubCluster","Mzb1")
 ```
 
-- 6 are Mmp12+ Mp (Mp1)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Mmp12")
+- 4 are fibroblast doublets
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["10"]]),20)
+plotExpression(sce.sub,x="SubCluster","Col1a2")
+plotExpression(sce.sub,x="SubCluster","Cd14")
 ```
 
-- 7 are similar to the Tam clusters
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Ms4a7")
-```
-
-- 8 are Eosinophils (Ear2)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+- 5 are Eosinophils (Ear2)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
 plotExpression(sce.sub,x="SubCluster","Ear2")
 ```
 
-- 9 are B-Cells (Mzb1)
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Mzb1")
+- 6 and 7 similar to the Tam clusters
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cd14")
+plotExpression(sce.sub,x="SubCluster","Ms4a7")
+```
+
+- 8 are Mmp12+ Mp (Mp1)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Mmp12")
+```
+
+- 9 are a mix of B and T cells (-> Doublet)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cd79a")
+plotExpression(sce.sub,x="SubCluster","Cd3d")
+```
+
+- 10 have no specific marker and very low count, will be removed
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(mark.sub[["10"]])
+plotColData(sce.sub,x="SubCluster",y="UmiSums")
 ```
 
 - This is then all saved in the original sce set
 - I also have to fix the Groups and MajorGroups annotaiton for some of these
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-textra <- sce.sub$barcode[sce.sub$SubCluster=="1"]
-mono <- sce.sub$barcode[sce.sub$SubCluster=="2"]
-mast <- sce.sub$barcode[sce.sub$SubCluster=="3"]
-dbls <- sce.sub$barcode[sce.sub$SubCluster=="4"]
-rms <- sce.sub$barcode[sce.sub$SubCluster=="5"]
-mp1ex <- sce.sub$barcode[sce.sub$SubCluster=="6"]
-tamex <- sce.sub$barcode[sce.sub$SubCluster=="7"]
-eosin <- sce.sub$barcode[sce.sub$SubCluster=="8"]
-bex <- sce.sub$barcode[sce.sub$SubCluster=="9"]
-sce$CellTypes[sce$barcode %in% textra] <- "Tc.1"
+mono <- sce.sub$barcode[sce.sub$SubCluster=="1"]
+epidbl <- sce.sub$barcode[sce.sub$SubCluster=="2"]
+bcs <- sce.sub$barcode[sce.sub$SubCluster=="3"]
+fbdbl <- sce.sub$barcode[sce.sub$SubCluster=="4"]
+eosin <- sce.sub$barcode[sce.sub$SubCluster=="5"]
+tamex1 <- sce.sub$barcode[sce.sub$SubCluster=="6"]
+tamex2 <- sce.sub$barcode[sce.sub$SubCluster=="7"]
+mp1ex <- sce.sub$barcode[sce.sub$SubCluster=="8"]
+btdbl <- sce.sub$barcode[sce.sub$SubCluster=="9"]
+rmc <- sce.sub$barcode[sce.sub$SubCluster=="10"]
 sce$CellTypes[sce$barcode %in% mono] <- "Mcs"
-sce$CellTypes[sce$barcode %in% mast] <- "Mst"
-sce$CellTypes[sce$barcode %in% dbls] <- "Dbls"
-sce$CellTypes[sce$barcode %in% rms] <- "Dmgd"
-sce$CellTypes[sce$barcode %in% mp1ex] <- "Mp1.1"
-sce$CellTypes[sce$barcode %in% tamex] <- "Tam.1"
+sce$CellTypes[sce$barcode %in% epidbl] <- "EpiDbl"
+sce$CellTypes[sce$barcode %in% bcs] <- "Bcs.1"
+sce$CellTypes[sce$barcode %in% fbdbl] <- "FbDbl"
 sce$CellTypes[sce$barcode %in% eosin] <- "Esn"
-sce$CellTypes[sce$barcode %in% bex] <- "Bcs.1"
-sce$Groups[sce$CellTypes=="Tc.1"] <- "Lymphoid"
+sce$CellTypes[sce$barcode %in% tamex1] <- "Tam.1"
+sce$CellTypes[sce$barcode %in% tamex2] <- "Tam.2"
+sce$CellTypes[sce$barcode %in% mp1ex] <- "Mp1.1"
+sce$CellTypes[sce$barcode %in% btdbl] <- "BtDbl"
+sce$CellTypes[sce$barcode %in% rmc] <- "Dmgd"
 sce$Groups[sce$CellTypes=="Bcs.1"] <- "Lymphoid"
 ```
 
+
 - Clean Up, removing the doublets and damaged cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-rmClusters <- c("Dmgd","Dbls","Bsl2")
+rmClusters <- c("Dmgd","Dbls","BslDbl","EpiDbl","FbDbl","BtDbl","Dbl?","Fb9")
 sce <- sce[,!sce$CellTypes %in% rmClusters]
+plotUMAP(sce,text_by="CellTypes")
 ```
 
-- I finally run mergeCluster again as some of the clusters from MyUk? might have wrongly been split from other cells
+- I finally run mergeCluster again as some of the clusters from Mxd? might have wrongly been split from other cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 rmgenes <- rownames(sce)[!rowData(sce)$KeepForHvg]
-merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
+merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes)
 unique(merged$NewCluster)
 ```
 
-- This suggests merging Mp1 with Mp1.1, Tc.1 with Tc.Cd8.1 and Mcs with Dcs?
+- This suggests merging Mp1 with Mp1.1, Tam.1 with Tam1 and Mcs with Dcs?
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-sce$CellTypes[sce$CellTypes %in% c("Mp1.1")] <- "Mp1"
-sce$CellTypes[sce$CellTypes %in% c("Tc.1")] <- "Tc.Cd8.1"
+sce$CellTypes[sce$CellTypes %in% c("Tam.1")] <- "Tam1"
 sce$CellTypes[sce$CellTypes %in% c("Mcs")] <- "Dcs?"
+sce$CellTypes[sce$CellTypes %in% c("Mp1.1")] <- "Mp1"
 sce$CellTypes <- factor(sce$CellTypes)
 ```
 
@@ -474,10 +468,8 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
     geom_point() +
     scale_color_manual(values=levels(pD$Colors))
 ```
-
 # Final Annotation and Save
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
 saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
 sessionInfo()
 ```
