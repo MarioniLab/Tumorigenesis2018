@@ -70,7 +70,7 @@ combVar <- combVar[rowData(sce)$KeepForHvg,]
 hvgs <- getTopHVGs(combVar)
 print("Combined Var")
 # mnnCorrect
-# param <- MulticoreParam(workers=4)
+param <- MulticoreParam(workers=4)
 
 # Define merge order so that the pregnancy is mapped onto tumorigenesis
 # The reasoning is that the tumorigenesis is the most heterogeneous, e.g. tumor cells
@@ -81,7 +81,7 @@ ord <- list(list(1:3),list(4:5))
 print("Starting MNN")
 set.seed(300)
 mnncor <- batchelor::fastMNN(sce1,sce2,sce3,sce4,sce5,
-			     #                      BPPARAM=param, # commented this out for singularity
+		     BPPARAM=param, # commented this out for singularity
 		     k=20,
 		     d=50,
 		     merge.order=ord,
