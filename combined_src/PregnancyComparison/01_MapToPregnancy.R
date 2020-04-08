@@ -14,16 +14,17 @@ sce <- readRDS("../../data/combined_Robjects/SCE_final.rds")
 colnames(sce) <- sce$barcode # not sure why it wasn't like this in the first place
 		      
 # Read in Pregnancy Data
-sce.g <- readRDS("../../../PregnancyTimecourse2019/data/Robjects/SCE_final.rds")
+sce.g <- readRDS("../../data/combined_Robjects/SCE_final_Pregnancy.rds")
 
+print("Read in data")
 # Subset to same genes
 genes <- intersect(rownames(sce),rownames(sce.g))
 sce <- sce[genes,]
 sce.g <- sce.g[genes,]
 
 # Sub Sample for testing
-sce <- sce[,sample(ncol(sce),5000)]
-sce.g <- sce.g[,sample(ncol(sce.g),5000)]
+# sce <- sce[,sample(ncol(sce),5000)]
+# sce.g <- sce.g[,sample(ncol(sce.g),5000)]
 
 # Scale normalization factors
 mBatch <- batchelor::multiBatchNorm(sce,sce.g)
@@ -52,6 +53,7 @@ sce4 <- sce.g[,sce.g$Batch==1]
 sce5 <- sce.g[,sce.g$Batch==2]
 # rm(sce)
 rm(sce.g)
+print("Prepared data")
 
 #  Compute HVGs
 # Compute highly variable genes per batch
@@ -66,9 +68,9 @@ dec.var5 <- modelGeneVar(sce5)
 combVar <- combineVar(dec.var1,dec.var2,dec.var3,dec.var4,dec.var5)
 combVar <- combVar[rowData(sce)$KeepForHvg,]
 hvgs <- getTopHVGs(combVar)
-
+print("Combined Var")
 # mnnCorrect
-param <- MulticoreParam(workers=4)
+# param <- MulticoreParam(workers=4)
 
 # Define merge order so that the pregnancy is mapped onto tumorigenesis
 # The reasoning is that the tumorigenesis is the most heterogeneous, e.g. tumor cells
@@ -76,17 +78,19 @@ param <- MulticoreParam(workers=4)
 # In the other dataset
 ord <- list(list(1:3),list(4:5))
 
+print("Starting MNN")
 set.seed(300)
 mnncor <- batchelor::fastMNN(sce1,sce2,sce3,sce4,sce5,
-		     BPPARAM=param,
+			     #                      BPPARAM=param, # commented this out for singularity
 		     k=20,
 		     d=50,
 		     merge.order=ord,
 		     BSPARAM=IrlbaParam(deferred=TRUE),
 		     #                      BNPARAM=AnnoyParam(),
-		     cos.norm=TRUE, # prob necesarry as I didn't use multibatchnorm
+		     #cos.norm=TRUE, # prob necesarry as I didn't use multibatchnorm
 		     subset.row=hvgs,
 		     correct.all=TRUE)
+print("Done MNN")
 
 m <- cbind(logcounts(sce1),logcounts(sce2),logcounts(sce3),
 	   logcounts(sce4),logcounts(sce5))
@@ -99,17 +103,19 @@ assays(mnncor) <- list("logcounts"=m,
 # PCA
 m.cor <- reducedDim(mnncor)
 
+# Save correction
+saveRDS(m.cor,"../../data/combined_Robjects/Pregnancy_CorrectedPCA.rds")
+saveRDS(mnncor,"../../data/combined_Robjects/Pregnancy_FullMNN.rds")
+
 # Compute UMAP for whole dataset
 ump.cor <- umap(m.cor, random_state=42)
 out <- data.frame("barcode"=rownames(m.cor))
 out$UMAP1 <- ump.cor$layout[,1]
 out$UMAP2 <- ump.cor$layout[,2]
 
-# igr.cor <- get_umap_graph(ump.cor)
+igr.cor <- get_umap_graph(ump.cor)
 
-# Save correction
-saveRDS(m.cor,"../../data/combined_Robjects/Pregnancy_CorrectedPCA.rds")
-saveRDS(mnncor,"../../data/combined_Robjects/Pregnancy_FullMNN.rds")
+
 # Save UMAP
 saveRDS(igr.cor,"../../data/combined_Robjects/PregnancyUMAP_graph.rds")
-# write.csv(out,file="../../data/combined_Robjects/PregnancyUMAP_corrected.csv")
+write.csv(out,file="../../data/combined_Robjects/PregnancyUMAP_corrected.csv")
