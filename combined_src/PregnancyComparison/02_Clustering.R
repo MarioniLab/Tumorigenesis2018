@@ -4,9 +4,6 @@ library(scran)
 library(Matrix)
 source("../functions.R")
 
-comArgs <- commandArgs(trailingOnly=TRUE)
-steps <- as.numeric(comArgs[1])
-
 # Load Data
 sce <- readRDS("../../data/combined_Robjects/Pregnancy_FullMNN.rds")
 
@@ -16,7 +13,7 @@ igr.cor <- readRDS("../../data/combined_Robjects/PregnancyUMAP_graph.rds")
 # ---- Based on UMAP Graph ----
 # Clustering with walktrap on the UMAP graph
 set.seed(42)
-ump.wktrp <- cluster_walktrap(igr.cor, steps=steps)
+ump.wktrp <- cluster_walktrap(igr.cor, steps=7)
 cl.ump.wktrp <- paste0("C",ump.wktrp$membership)
 
 
@@ -32,4 +29,4 @@ sce$Cluster <- merged$NewCluster
 # ---- Save ----
 out <- colData(sce)
 out$Cluster <- paste0("C",as.numeric(out$Cluster))
-write.csv(out[,c("barcode","Cluster")],paste0("../../data/combined_Robjects/PregnancyClusters_w",steps,".csv"))
+write.csv(out[,c("barcode","Cluster")],"../../data/combined_Robjects/PregnancyClusters_.csv")
