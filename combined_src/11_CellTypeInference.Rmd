@@ -404,6 +404,115 @@ sce$CellTypes[sce$barcode %in% rmc] <- "Dmgd"
 sce$Groups[sce$CellTypes=="Bcs.1"] <- "Lymphoid"
 ```
 
+### Tc.Cd8.1?
+- Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Tc.Cd8.1")) +
+    geom_point()
+```
+
+- Sub Clustering with SNN and louvain
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$CellTypes=="Tc.Cd8.1"]
+m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+m.cor <- m.cor[sce.sub$barcode,]
+
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+set.seed(42)
+igr <- buildSNNGraph(t(m.cor))
+subc <- igraph::cluster_louvain(igr)
+sce.sub$SubCluster <- factor(subc$membership)
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up",
+			subset.row=rowData(sce.sub)[,"KeepForHvg"])
+sce.sub <- make_hexbin(sce.sub, nbins = 50, 
+    dimension_reduction = "UMAP", use_dims=c(1,2))
+```
+
+- They all have TCR
+- not all are Cd8a positive
+- 4 highest, then 2, then 1
+- 5 iis highest for Cd4
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cd3d")
+plotExpression(sce.sub,x="SubCluster","Cd8a")
+plotExpression(sce.sub,x="SubCluster","Cd4")
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="Gzma")
+```
+
+- 4 express high level of Cd8, and parts of them high levels of Gzma and Gzmb
+- most likely CTLs, could also be NK cells (Klr7a)
+- best marked by Xcl1
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Xcl1")
+plot_hexbin_gene(sce.sub, type="logcounts", gene="Gzma", 
+    action="mean")
+```
+
+- 2 are T-Cells (Cd8)
+- not marked by much tbh
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["2"]]),30)
+plotExpression(sce.sub,x="SubCluster","Plek")
+```
+
+- 1 are T-Cells (Cd8)
+- not marked by much tbh
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["1"]]),10)
+plotExpression(sce.sub,x="SubCluster","Ctla4")
+```
+
+- 5 are Tregs
+- Ctla4, Foxp3, Tnfrsf18
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["5"]]),10)
+plotExpression(sce.sub,x="SubCluster","Ctla4")
+plotExpression(sce.sub,x="SubCluster","Tnfrsf18")
+```
+
+- 3 are probably memory T-Cells (have Ccr7, Lef1)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["3"]]),10)
+plotExpression(sce.sub,x="SubCluster","Ccr7")
+```
+
+- 6 show signature of IFN response Irf7, Iftim3, Bcl2a1b
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["6"]]),10)
+plotExpression(sce.sub,x="SubCluster","Irf7")
+plotExpression(sce.sub,x="SubCluster","Ifitm3")
+```
+
+- 7 hmm maybe peripheral ? (Blk)
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+head(data.frame(mark.sub[["7"]]),30)
+plotExpression(sce.sub,x="SubCluster","Tmem176b")
+plotExpression(sce.sub,x="SubCluster","Blk")
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+TcCd81 <- sce.sub$barcode[sce.sub$SubCluster=="1"]
+TcCd82 <- sce.sub$barcode[sce.sub$SubCluster=="2"]
+TcMem <- sce.sub$barcode[sce.sub$SubCluster=="3"]
+TcCTL <- sce.sub$barcode[sce.sub$SubCluster=="4"]
+TcTreg <- sce.sub$barcode[sce.sub$SubCluster=="5"]
+TcIfn <- sce.sub$barcode[sce.sub$SubCluster=="6"]
+TcPer <- sce.sub$barcode[sce.sub$SubCluster=="7"]
+sce$CellTypes[sce$barcode %in% TcCd81] <- "TcCd81"
+sce$CellTypes[sce$barcode %in% TcCd82] <- "TcCd82"
+sce$CellTypes[sce$barcode %in% TcMem] <- "TcMem"
+sce$CellTypes[sce$barcode %in% TcCTL] <- "TcCTL"
+sce$CellTypes[sce$barcode %in% TcTreg] <- "TcTreg"
+sce$CellTypes[sce$barcode %in% TcIfn] <- "TcIfn"
+sce$CellTypes[sce$barcode %in% TcPer] <- "TcPer"
+```
+
 
 - Clean Up, removing the doublets and damaged cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
@@ -421,6 +530,7 @@ unique(merged$NewCluster)
 ```
 
 - This suggests merging Mp1 with Mp1.1, Tam.1 with Tam1 and Mcs with Dcs?
+- I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about TcCd81 and TcCd82, but will leave it like this for now)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce$CellTypes[sce$CellTypes %in% c("Tam.1")] <- "Tam1"
 sce$CellTypes[sce$CellTypes %in% c("Mcs")] <- "Dcs?"
