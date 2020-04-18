@@ -127,16 +127,16 @@ celltypes <- paste0("C",celltypes)
 
 names(celltypes) <- c("Ec1","Bsl1","Lp","Hsp","HsGearly",#5
 		      "Nk1","Dc209","Fb1","Fb2","Avp",#10
-		      "Avd","Mp2a?","Mp1b?","Bcs","Uk1?",#15
+		      "Avd","Mp2aQ","Mp1bQ","Bcs","Uk1Q",#15
 		      "Fb3", "Nk2", "Swc", "Pcs1", "Mp1a",#20
 		      #
 		      "Tc.1Cyl","Ec2","Pc2","Hs","Fb4",#25
 		      "BslNP","HsG","BslG2","Fb5","BslG3",#30
-		      "Fb6", "FbUk?", "Dcs?", "Fb7", "Mp2b",#35
-		      "Hs2", "BslCycl", "TcLN", "FbUk2?", "BslG4",#40
+		      "Fb6", "FbUkQ", "DcsQ", "Fb7", "Mp2b",#35
+		      "Hs2", "BslCycl", "TcLN", "FbUk2Q", "BslG4",#40
 		      #
-		      "TcLN2","Uk2?","HsCycl","AvpDbl?", "Np",#45
-		      "Ilc3.1", "Dbl?", "Ilc3.2", "Fb8", "Mst" #50
+		      "TcLN2","Uk2Q","HsCycl","AvpDblQ", "Np",#45
+		      "Ilc3.1", "DblQ", "Ilc3.2", "Fb8", "Mst" #50
 		      )
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
 sort(table(sce$CellTypes), decreasing=TRUE)
@@ -158,7 +158,7 @@ plotColData(sce, x="CellTypes",y="prcntMito") + theme(axis.text.x=element_text(s
 plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(size=9, angle=45, hjust=1, vjust=1))
 ```
 
-## Dbl? is a multiplet
+## DblQ is a multiplet
 - Expresses basal/luminal Krts and Ptprc
 ```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
 plotExpression(sce, "Krt8", x="CellTypes")
@@ -172,7 +172,7 @@ plotExpression(sce, "Krt17", x="CellTypes")
 plotExpression(sce, "Apod", x="CellTypes")
 ```
 
-## AvpDbl? is a multiplet
+## AvpDblQ is a multiplet
 - Expresses basal/luminal Krts (see above)
 
 ## Clean Up
@@ -185,7 +185,7 @@ tbbl <- table(sce$SampleID,sce$CellTypes)
 tbbl.prop <- round(t(t(tbbl)/colSums(tbbl)) *100,2)
 plotExpression(sce, x="CellTypes", features=c("Sell"))
 plotExpression(sce, x="CellTypes", features=c("Ccr7"))
-rmClusters <- c("AvpDbl?","Dbl?","Uk1?","Uk2?","TcLN","TcLN2")
+rmClusters <- c("AvpDblQ","DblQ","Uk1Q","Uk2Q","TcLN","TcLN2")
 sce <- sce[,!sce$CellTypes %in% rmClusters]
 ```
 
