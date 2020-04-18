@@ -1,8 +1,10 @@
 /data
-/history
 *.html
 *_cache/
 *_files/
 *.gif
 *.pdf
 *.svg
+*.html
+*.pdf
+*.sh

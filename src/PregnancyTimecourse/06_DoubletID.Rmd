@@ -1,0 +1,307 @@
+---
+title: "Doublet Calling"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+In this document I will further clean up the data and remove cells that most likely represent doublets, damaged cells or red blood cell contamination.
+
+
+# Removal of doublets
+The following strategy for doubled removal was employed, somewhat following an approach from __Pijuana-Sala, Griffiths and Guibentif et al.__
+
+1. Estimate probability of cell being a doublet per sample using doubletCells from scran.
+2. Compute per sample clusters based on all genes based on a SNNGraph (k=10) and walktrap clustering with high resolution (steps=2, see `05_computeDoubletScores.R`).
+3. Clusters with high average doublet probability are identified as doublets.
+4. All cells and samples (incl. doublets) are integrated using fastMNN, cells that cluster with "known" doublets cells are guilty by association.
+
+## Per sample clusters
+- Below are the per sample clusters as well as the doublet scores per cell.
+- The big clusters that all receive relatively high doublet scores are fibroblasts.
+- Interestingly, CTRL_1 has this funny ring structure that Pauline had seen in the combined data set as well.
+```{r, message=FALSE,fig.height=17,fig.width=17}
+# Identifying doublets with doubletCluster
+library(ggplot2)
+library(scran)
+library(cowplot)
+library(wesanderson)
+library(viridis)
+theme_set(theme_cowplot())
+
+# Read in data
+ddata <- readRDS("../data/Robjects/DoubletData.rds")
+
+# Add sample index to data frames
+# Also I am log transforming the scores here already
+# Since Bioc10 the scores have a different distribution, with a much wider range
+nms <- names(ddata)
+ddata <- lapply(names(ddata), function(x) {
+		dfs <- ddata[[x]]
+		dfs$Sample <- x
+		dfs$DbltScore <- log10(dfs$DbltScore)
+		return(dfs)
+})
+names(ddata) <- nms
+
+# Visualizing the clustering
+cluster_plots <- lapply(names(ddata), function(nm) {
+		   x <- data.frame(ddata[[nm]])
+		   p <- ggplot(x, aes(x=SubUMAP1, y=SubUMAP2, color=factor(Cluster))) +
+			       geom_point(size=0.7) +
+			       scale_color_manual(values=wes_palette("FantasticFox1",length(unique(x$Cluster)),type="continuous")) +
+			       theme(legend.position="none", panel.background = element_rect(colour = "black", linetype = 1, size = 0.5),
+				     axis.line = element_blank(),
+				     axis.ticks = element_blank(),
+				     axis.text = element_blank(),
+				     axis.title = element_blank(),) +
+			       ggtitle(paste0(nm," (n=",nrow(x),", k=",length(unique(x$Cluster)),")")) 
+			   return(p)
+})
+names(cluster_plots) <- names(ddata)
+plot_grid(plotlist=cluster_plots)
+
+# Visualizing the doublet scores
+score_plots <- lapply(names(ddata), function(nm) {
+		   x <- data.frame(ddata[[nm]])
+		   p <- ggplot(x, aes(x=SubUMAP1, y=SubUMAP2, color=DbltScore)) +
+			       geom_point(size=0.7) +
+			       scale_color_viridis() +
+			       theme(legend.position="none", panel.background = element_rect(colour = "black", linetype = 1, size = 0.5),
+				     axis.line = element_blank(),
+				     axis.ticks = element_blank(),
+				     axis.text = element_blank(),
+				     axis.title = element_blank(),) +
+			       ggtitle(paste0(nm," (n=",nrow(x),", k=",length(unique(x$Cluster)),")")) 
+			   return(p)
+})
+names(score_plots) <- names(ddata)
+plot_grid(plotlist=score_plots)
+```
+
+## Identify clusters per samples that represent doublets
+- Clusters that had a higher than median + 1.5xmad doublet score and were present at a frequency of less than 5% were identified as doublet cells
+- 1.5 as this seemed to produce the most reasonable results in terms of stringency
+- At this point I want to be rather stringent in the definition as it is more problematic to remove biologically relevant clusters than maintaining doublet clusters as they can still be flagged later.
+```{r, message=FALSE, fig.width=10}
+# Identifying doublets based on doubletCell
+
+ddatadf <- data.frame(do.call(rbind,ddata))
+
+# Compute median scores per cluster and sample
+medscores <- aggregate(ddatadf$DbltScore, list(ddatadf$Sample, ddatadf$Cluster), median)
+names(medscores) = c("sample", "cluster", "median.score")
+
+medscores$n.cells = sapply(1:nrow(medscores), function(row){
+			       sum(ddatadf$Cluster == medscores$cluster[row] & ddatadf$Sample == medscores$sample[row])
+})
+
+medscores$fracCells = sapply(1:nrow(medscores), function(row){
+				  medscores$n.cells[row]/sum(medscores$n.cells[medscores$sample == medscores$sample[row]])
+})
+
+
+# Define doublets based on fraction and median doublet score
+medscores$outlier <- scater::isOutlier(medscores$median.score,nmad=1.5,type="higher",log=FALSE)
+medscores$isDoublet <- medscores$outlier & medscores$fracCells <= 0.05
+
+# Plot from Johnny with the significant clusters highlighted
+ggplot(medscores, aes(x = sample, y = median.score, col = factor(cluster))) +
+  geom_point(data = medscores[medscores$isDoublet,]) +
+  geom_jitter(data = medscores[!medscores$isDoublet,], col = "darkgrey", size = 0.4, width = 0.2, height = 0) +
+  guides(color="none") +
+  labs(x = "Sample", y = "cluster median score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+medscores.dbls <- medscores[medscores$isDoublet,]
+smp.dbltCluster <- paste(medscores.dbls$sample,medscores.dbls$cluster,sep="_")
+```
+
+
+## Visualizing the doublet called clusters
+- most clusters show the typical tear shape in the UMAP
+- some clusters also appear to bel self-doublets, which are less problematic but will still be removed
+- however we can already see here that there might be more doublet clusters than we identified above
+```{r, message=FALSE, fig.height=13, fig.width=13}
+smps <- names(ddata)[names(ddata) %in% medscores.dbls$sample]
+doublet_plots <- lapply(smps, function(nm) {
+		   x <- data.frame(ddata[[nm]])
+		   p <- ggplot(x, aes(x=SubUMAP1, y=SubUMAP2)) +
+			       geom_point(color="grey80",size=0.7) +
+			       geom_point(data=x[x$Cluster %in% medscores.dbls[medscores.dbls$sample==nm,"cluster"],], aes(color=factor(Cluster))) +
+			       #                                scale_color_manual(values=wes_palette("FantasticFox1",length(unique(x$Cluster)),type="continuous")) +
+			       theme(legend.position="none", panel.background = element_rect(colour = "black", linetype = 1, size = 0.5),
+				     axis.line = element_blank(),
+				     axis.ticks = element_blank(),
+				     axis.text = element_blank(),
+				     axis.title = element_blank(),) +
+			       ggtitle(paste0(nm," (n=",nrow(x),", k=",length(unique(x$Cluster)),")")) 
+			   return(p)
+})
+names(doublet_plots) <- smps
+plot_grid(plotlist=doublet_plots)
+```
+
+## Doublet clusters have a larger library size
+```{r, message=FALSE}
+pD <- colData(readRDS("../data/Robjects/SCE_QC_norm.rds"))
+pD <- data.frame(pD)
+library(dplyr)
+ddatadf <- left_join(data.frame(ddatadf),pD[,c("barcode","UmiSums","GenesDetected","prcntMito")])
+ddatadf$sampClust <- paste0(ddatadf$Sample,"_",ddatadf$Cluster)
+ddatadf$isDoublet <- ifelse(ddatadf$sampClust %in% smp.dbltCluster,"Doublet","Singlet")
+ggplot(ddatadf, aes(x=isDoublet,y=log10(UmiSums))) +
+       geom_boxplot() 
+```
+
+## Cluster batch corrected data
+- Next we will identify cells that are guilty-by-association by clustering the full dataset including the above identified doublet cells and find clusters with a high frequency of doublets
+```{r, message=FALSE, warning=FALSE}
+# Read in BC PCA
+sce.cor <- readRDS("../data/Robjects/Corrected_preDoublet.rds")
+m.cor <- reducedDim(sce.cor, type="corrected")
+igr <- buildSNNGraph(m.cor,d=NA, transposed=TRUE)
+# Overcluster
+cl <- igraph::cluster_walktrap(igr,steps=2)
+cluster <- cl$membership
+clusDf <- data.frame("barcode"=rownames(m.cor),
+		     "fullCluster"=cluster)
+ddatadf <- dplyr::left_join(ddatadf,clusDf)
+```
+
+
+## Guilty-by-association clusters
+- All clusters with more than median+ 2x mad fraction of doublets are additionally identifed as doublet clusters
+```{r, message=FALSE, warning=FALSE}
+smry <- group_by(ddatadf, fullCluster, isDoublet) %>%
+    summarize(NType=n()) %>%
+    mutate(Prop=NType/sum(NType))
+
+doubDef <- scater::isOutlier(smry$Prop[smry$isDoublet=="Doublet"],nmads=2,type="higher")
+dblClusters <- smry$fullCluster[smry$isDoublet=="Doublet"][doubDef]
+thrsld <- attributes(doubDef)[[1]][2]
+
+ggplot(smry, aes(x=fullCluster, y=Prop, fill=isDoublet)) +
+    geom_bar(stat="identity") +
+    geom_hline(yintercept=1-thrsld) +
+    scale_fill_manual(values=c("black","red"))
+
+ump <- reducedDim(sce.cor, type="umap")
+ump <- data.frame("barcode"=rownames(ump),
+		  "UMAP1"=ump[,1],
+		  "UMAP2"=ump[,2])
+ddatadf <- left_join(data.frame(ddatadf),ump)
+
+ggplot(ddatadf, aes(x=UMAP1, y=UMAP2, color=ddatadf$fullCluster %in% dblClusters)) +
+    geom_point() +
+    scale_color_manual(values=c("black","red")) +
+    theme(legend.position="none")
+```
+
+## Highlighting all cells identified as doublets
+```{r, message=FALSE}
+dbl.barcodes <- ddatadf$barcode[ddatadf$isDoublet=="Doublet" | ddatadf$fullCluster %in% dblClusters]
+
+ddatadf$isDoubletFinal <- ddatadf$barcode %in% dbl.barcodes
+ggplot(ddatadf, aes(x=UMAP1, y=UMAP2, color=ddatadf$isDoubletFinal)) +
+    geom_point() +
+    scale_color_manual(values=c("black","red")) +
+    theme(legend.position="none")
+```
+
+- As expected sample with more cells tend to have a higher frequency of doublets.
+```{r, message=FALSE}
+smry <- group_by(ddatadf, Sample, isDoubletFinal) %>%
+    summarize(n=n()) %>%
+    mutate(DoubletFraction=n/sum(n),totCells=sum(n)) %>%
+    ungroup() %>%
+    filter(isDoubletFinal)
+
+ggplot(smry, aes(x=totCells,y=DoubletFraction)) +
+    geom_point()
+```
+
+# Other outliers
+- To try to identify damaged cells I looked at % of mitochondrial reads versus library size
+- The idea being that clusters with very low mitochondrial reads can be damaged cells/ stripped nuclei
+- Although there are some clsuters with low % of mito reads it is hard to visually define a threshold here and clusters below the threshold will only be flagged
+
+```{r, message=FALSE, warning=FALSE}
+m <- logcounts(readRDS("../data/Robjects/SCE_QC_norm.rds"))
+hbb.exp <- colSums(m[c("Hbb-bt","Hbb-bs","Hbb-bh1"),])
+hbb.exp <- data.frame("barcode"=names(hbb.exp),
+		      "hbbExp"=hbb.exp)
+ddatadf <- left_join(ddatadf,hbb.exp)
+smry <- group_by(ddatadf, sampClust) %>%
+    summarize(medUmi=median(UmiSums),
+	      medprcntMito=median(prcntMito),
+	      medGd=median(GenesDetected),
+	      medHb=median(hbbExp)) %>%
+    ungroup() %>%
+    as.data.frame()
+
+ggplot(smry, aes(x=medUmi,y=medprcntMito)) +
+    geom_point() +
+    scale_x_log10() +
+    scale_y_log10() +
+    geom_hline(yintercept=0.005) +
+    xlab("Library Size") +
+    ylab("Fraction of Mitochondrial Reads")
+```
+
+- Also in the UMAP below I am not fully convinced that they are all truly damaged cells.
+- If they were I would expect them to "stand out" more. (plus it's only a handful of cells)
+- I did label cells as "potentially damaged" and will keep that information for further analyses. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+cls <- smry[smry$medprcntMito<0.005,"sampClust"]
+smps.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) paste0(x[1],"_",x[2])))
+cls.dmgd <- unlist(lapply(strsplit(cls,split="_"),function(x) x[3]))
+
+dmgd_plots <- lapply(1:length(smps.dmgd), function(i) {
+		   nm <- smps.dmgd[i]
+		   x <- data.frame(ddata[[nm]])
+		   p <- ggplot(x, aes(x=SubUMAP1, y=SubUMAP2)) +
+			       geom_point(color="grey80",size=0.7) +
+			       geom_point(data=x[x$Cluster %in% cls.dmgd[i],], aes(color=factor(Cluster))) +
+			       #                                scale_color_manual(values=wes_palette("FantasticFox1",length(unique(x$Cluster)),type="continuous")) +
+			       theme(legend.position="none", panel.background = element_rect(colour = "black", linetype = 1, size = 0.5),
+				     axis.line = element_blank(),
+				     axis.ticks = element_blank(),
+				     axis.text = element_blank(),
+				     axis.title = element_blank(),) +
+			       ggtitle(paste0(nm," (n=",nrow(x),", k=",length(unique(x$Cluster)),")")) 
+			   return(p)
+})
+names(dmgd_plots) <- smps.dmgd
+plot_grid(plotlist=dmgd_plots)
+dmgd <- ddatadf$barcode[ddatadf$sampClust %in% cls]
+ddatadf$isPotDamaged <- ddatadf$barcode %in% dmgd
+```
+
+- Finally I exclude clusters that show expression of hemoglobin
+```{r, message=FALSE, warning=FALSE}
+library(ggrepel)
+ggplot(smry, aes(x=sampClust,y=medHb)) +
+    geom_point() +
+    xlab("Per-Sample Clusters") +
+    ylab("Median Hbb Expression") +
+    geom_label_repel(data=smry[smry$medHb>0.01,],aes(label=sampClust)) +
+    theme(axis.text.x=element_blank())
+rbcs <- smry[smry$medHb>0.01,"sampClust"]
+rbcs <- ddatadf$barcode[ddatadf$sampClust %in% rbcs]
+```
+# Save
+```{r, message=FALSE, warning=FALSE}
+ddatadf$isRbc <- ddatadf$barcode %in% rbcs
+qcMets <- ddatadf[,c("barcode","DbltScore","isRbc","isDoubletFinal","isPotDamaged")]
+write.csv(qcMets,"../data/Robjects/QC_Part2.csv")
+```
