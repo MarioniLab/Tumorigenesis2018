@@ -29,12 +29,12 @@ library(dplyr)
 library(cowplot)
 theme_set(theme_cowplot())
 
-smps <- list.files("../data/CellRangerOutput/")
+smps <- list.files("../../data/Pregnancy/CellRangerOutput/")
 smps <- grep("[0-9]$",smps,value=TRUE)
-fnames <- paste0("../data/CellRangerOutput/",smps,"/raw")
+fnames <- paste0("../../data/Pregnancy/PCellRangerOutput/",smps,"/raw")
 
 out <- bplapply(fnames, function(fle) {
-    nm <- gsub("../data/CellRangerOutput/|/raw","",fle)
+    nm <- gsub("../../data/Pregnancy/CellRangerOutput/|/raw","",fle)
     sce <- read10xCounts(fle, col.names=TRUE,version="3")
 
     bcrank <- barcodeRanks(counts(sce))
@@ -150,8 +150,8 @@ I then added some meta data to the columns and row of the SCE.
 ## Column Data
 ```{r, warning=FALSE, message=FALSE}
 # Read in meta data
-meta.b1 <- read.csv("../data/misc/SLX-18206.HKJ5GDMXX.s_2.contents.csv",stringsAsFactors=FALSE)
-meta.b2 <- read.csv("../data/misc/SLX-18386.HL3WKDMXX.s_1.contents.csv",stringsAsFactors=FALSE)
+meta.b1 <- read.csv("../../data/misc/SLX-18206.HKJ5GDMXX.s_2.contents.csv",stringsAsFactors=FALSE)
+meta.b2 <- read.csv("../../data/misc/SLX-18386.HL3WKDMXX.s_1.contents.csv",stringsAsFactors=FALSE)
 meta <- rbind(meta.b1,meta.b2)
 meta$Barcode <- substr(meta$Barcode,5,6)
 meta$Condition <- unlist(lapply(strsplit(meta$SampleName,"_"), function(x) x[1]))
@@ -174,7 +174,7 @@ head(pD)
 
 ```{r, warning=FALSE, message=FALSE}
 # Add more info to the feature Data
-mitoGenes <- read.table("../data/misc/MitoGenes.txt")
+mitoGenes <- read.table("../../data/misc/MitoGenes.txt")
 
 # Ribosmal genes
 library(biomaRt)
@@ -211,7 +211,7 @@ sceout <- sceout[,sceout$Condition!="11aOVX"]
 
 keep <- rowSums(counts(sceout))>1
 sceout <- sceout[keep,]
-saveRDS(sceout,file="../data/Robjects/SCE.rds")
+saveRDS(sceout,file="../../data/Pregnancy/Robjects/SCE.rds")
 ```
 
 ## Session Info

@@ -30,7 +30,7 @@ library(DT)
 theme_set(theme_cowplot())
 
 # Load Data
-sce <- readRDS("../data/Robjects/SCE.rds")
+sce <- readRDS("../../data/Pregnancy/Robjects/SCE.rds")
 
 m <- counts(sce)
 pD <- data.frame(colData(sce))
@@ -266,7 +266,7 @@ cellViability %+% pD
 sceout <- SingleCellExperiment(assays=list(counts=m),
 			       colData=pD,
 			       rowData=fD)
-saveRDS(sceout,file="../data/Robjects/SCE_QC.rds")
+saveRDS(sceout,file="../../data/Pregnancy/Robjects/SCE_QC.rds")
 ```
 
 ## Session Info

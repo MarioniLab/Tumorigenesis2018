@@ -28,18 +28,16 @@ library(irlba)
 source("../functions.R")
 theme_set(theme_cowplot())
 
-sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../../data/Pregnancy/Robjects/SCE_QC_norm.rds")
 
-umap <- read.csv("../data/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../data/Robjects/Clusters_stepsize7.csv",stringsAsFactors=FALSE)[,-1]
+umap <- read.csv("../../data/Pregnancy/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../../data/Pregnancy/Robjects/Clusters_stepsize6.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,anno$barcode]
 pD <- data.frame(colData(sce))
 pD <- left_join(pD,anno[,c("barcode","UMAP1","UMAP2","Cluster")])
 colData(sce) <- DataFrame(pD)
 reducedDim(sce, type="UMAP") <- pD[,c("UMAP1","UMAP2")]
-oldCT <- read.csv("OldCT.csv")[,-1]
-pD <- left_join(pD,oldCT)
 ```
 
 
@@ -148,7 +146,7 @@ sort(table(sce$CellTypes), decreasing=TRUE)
 - As this will be the final annotation, I will one last time check that none of the clusters is funny in terms of QC criteria
 
 ```{r, fig.width=10, fig.height=3, warning=FALSE, message=FALSE}
-extraQC <- read.csv("../data/Robjects/QC_Part2.csv")[,-1]
+extraQC <- read.csv("../../data/Pregnancy/Robjects/QC_Part2.csv")[,-1]
 rownames(extraQC) <- extraQC$barcode
 extraQC <- extraQC[sce$barcode,]
 sce$DbltScore <- extraQC$DbltScore
@@ -197,57 +195,5 @@ sce <- sce[,!sce$CellTypes %in% rmClusters]
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 colnames(sce) <- sce$barcode
 plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
-saveRDS(sce,file="../data/Robjects/SCE_final.rds")
-```
-
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-pD <- data.frame(colData(sce))
-pD.c <- pD[pD$Condition=="CTRL",]
-pD.g1 <- pD[pD$Condition=="4.5dG",]
-pD.g2 <- pD[pD$Condition=="9.5dG",]
-pD.g3 <- pD[pD$Condition=="14.5dG",]
-
-p.c <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.c,aes(color=MajorGroups)) +
-    scale_color_brewer(palette="Dark2") +
-    ggtitle("NP") +
-    theme_void()
-p.g1 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g1,aes(color=MajorGroups)) +
-    scale_color_brewer(palette="Dark2") +
-    ggtitle("4.5dG") +
-    theme_void()
-p.g2 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g2,aes(color=MajorGroups)) +
-    scale_color_brewer(palette="Dark2") +
-    ggtitle("9.5dG") +
-    theme_void()
-p.g3 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point(color="grey80") +
-    geom_point(data=pD.g3,aes(color=MajorGroups)) +
-    scale_color_brewer(palette="Dark2") +
-    ggtitle("14.5dG") +
-    theme_void()
-plot_grid(p.c,p.g1,p.g2,p.g3)
-
-
-# For Walid
-pD$Timepoint <- mapvalues(pD$Condition,
-			  c("CTRL","4.5dG","9.5dG","14.5dG"),
-			  c(0,4.5,9.5,14.5))
-pD$Timepoint <- as.numeric(pD$Timepoint)
-library(viridis)
-ggplot(pD[sample(nrow(pD)),], aes(x=UMAP1, y=UMAP2, color=Timepoint)) +
-    geom_point() +
-    scale_color_viridis(begin=0,end=0.8,option="B")
-
-ggplot(pD, aes(x=UMAP1, y=UMAP2,color=Cluster=="C3")) +
-    geom_point() 
-
-ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-    geom_point() +
-    facet_wrap(~Cluster)
+saveRDS(sce,file="../../data/Pregnancy/Robjects/SCE_final.rds")
 ```

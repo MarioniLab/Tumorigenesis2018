@@ -8,10 +8,10 @@ library(igraph)
 library(BiocSingular)
 source("../functions.R")
 
-sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../../data/Pregnancy/Robjects/SCE_QC_norm.rds")
 # sce <- sce[,sample(ncol(sce),5000)]
 # Remove Anything that failed second round of QC 
-qcMets <- read.csv("../data/Robjects/QC_Part2.csv",row.names=1,stringsAsFactors=FALSE)
+qcMets <- read.csv("../../data/Pregnancy/Robjects/QC_Part2.csv",row.names=1,stringsAsFactors=FALSE)
 rmCells <- qcMets$barcode[qcMets$isDoubletFinal | qcMets$isRbc]
 
 sce <- sce[,!colnames(sce) %in% rmCells]
@@ -35,7 +35,7 @@ out$UMAP2Uncor <- ump$layout[,2]
 igr.uncor <- get_umap_graph(ump)
 
 # ---- After Correction -----
-m.cor <- readRDS("../data/Robjects/CorrectedPCA.rds")
+m.cor <- readRDS("../../data/Pregnancy/Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[colnames(sce),]
 set.seed(42)
 ump.cor <- umap(m.cor, random_state=42)
@@ -47,5 +47,5 @@ igr.cor <- get_umap_graph(ump.cor)
 
 out2 <- list("Corrected"=igr.cor,
 	    "Uncorrected"=igr.uncor)
-saveRDS(out2,"../data/Robjects/UMAP_graphs.rds")
-write.csv(out,file="../data/Robjects/UMAP_corrected.csv")
+saveRDS(out2,"../../data/Pregnancy/Robjects/UMAP_graphs.rds")
+write.csv(out,file="../../data/Pregnancy/Robjects/UMAP_corrected.csv")

@@ -8,7 +8,7 @@ library(BiocNeighbors)
 library(umap)
 
 # Read in Data
-sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../../data/Pregnancy/Robjects/SCE_QC_norm.rds")
 		      
 smps <- unique(sce$SampleID)
 out <- bplapply(smps, function(smp) {
@@ -56,4 +56,4 @@ out <- bplapply(smps, function(smp) {
     return(out)
 },  BPPARAM=SerialParam())
 names(out) <- smps
-saveRDS(out,"../data/Robjects/DoubletData.rds")
+saveRDS(out,"../../data/Pregnancy/Robjects/DoubletData.rds")

@@ -37,7 +37,7 @@ library(viridis)
 theme_set(theme_cowplot())
 
 # Read in data
-ddata <- readRDS("../data/Robjects/DoubletData.rds")
+ddata <- readRDS("../../data/Robjects/DoubletData.rds")
 
 # Add sample index to data frames
 # Also I am log transforming the scores here already
@@ -175,7 +175,7 @@ plot_grid(plotlist=doublet_plots)
 
 ## Doublet clusters have a larger library size
 ```{r, message=FALSE}
-pD <- colData(readRDS("../data/Robjects/SCE_QC_norm.rds"))
+pD <- colData(readRDS("../../data/Tumorigenesis/Robjects/SCE_QC_norm.rds"))
 pD <- data.frame(pD)
 library(dplyr)
 ddatadf <- left_join(data.frame(ddatadf),pD[,c("barcode","UmiSums","GenesDetected","prcntMito")])
@@ -189,7 +189,7 @@ ggplot(ddatadf, aes(x=isDoublet,y=log10(UmiSums))) +
 - Next we will identify cells that are guilty-by-association by clustering the full dataset including the above identified doublet cells and find clusters with a high frequency of doublets
 ```{r, message=FALSE, warning=FALSE}
 # Read in BC PCA
-sce.cor <- readRDS("../data/Robjects/Corrected_preDoublet.rds")
+sce.cor <- readRDS("../../data/Tumorigenesis/Robjects/Corrected_preDoublet.rds")
 m.cor <- reducedDim(sce.cor, type="corrected")
 igr <- buildSNNGraph(m.cor,d=NA, transposed=TRUE)
 # Overcluster
@@ -258,7 +258,7 @@ ggplot(smry, aes(x=totCells,y=DoubletFraction)) +
 - Although there are some clsuters with low % of mito reads one cluster stood out in partiuclar and will be removed
 
 ```{r, message=FALSE, warning=FALSE}
-m <- logcounts(readRDS("../data/Robjects/SCE_QC_norm.rds"))
+m <- logcounts(readRDS("../../data/Tumorigenesis/Robjects/SCE_QC_norm.rds"))
 hbb.exp <- colSums(m[c("Hbb-bt","Hbb-bs","Hbb-bh1"),])
 hbb.exp <- data.frame("barcode"=names(hbb.exp),
 		      "hbbExp"=hbb.exp)
@@ -326,5 +326,5 @@ rbcs <- ddatadf$barcode[ddatadf$sampClust %in% rbcs]
 ```{r, message=FALSE, warning=FALSE}
 ddatadf$isRbc <- ddatadf$barcode %in% rbcs
 qcMets <- ddatadf[,c("barcode","DbltScore","isRbc","isDoubletFinal","isPotDamaged")]
-write.csv(qcMets,"../data/Robjects/QC_Part2.csv")
+write.csv(qcMets,"../../data/Tumorigenesis/Robjects/QC_Part2.csv")
 ```

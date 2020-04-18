@@ -30,7 +30,7 @@ library(DT)
 theme_set(theme_cowplot())
 
 # Load Data
-sce <- readRDS("../data/Robjects/SCE.rds")
+sce <- readRDS("../../data/Tumorigenesis/Robjects/SCE.rds")
 sce <- sce[,!sce$ChlodronateExperiment]
 
 m <- counts(sce)
@@ -277,7 +277,7 @@ cellViability %+% pD
 sceout <- SingleCellExperiment(assays=list(counts=m),
 			       colData=pD,
 			       rowData=fD)
-saveRDS(sceout,file="../data/Robjects/SCE_QC.rds")
+saveRDS(sceout,file="../../data/Tumorigenesis/Robjects/SCE_QC.rds")
 ```
 
 ## Session Info

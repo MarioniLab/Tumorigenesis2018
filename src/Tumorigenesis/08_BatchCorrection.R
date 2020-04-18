@@ -6,10 +6,10 @@ library(BiocParallel)
 library(BiocSingular)
 
 # Read in Data
-sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../../data/Tumorigenesis/Robjects/SCE_QC_norm.rds")
 		      
 # Remove Anything that failed second round of QC 
-qcMets <- read.csv("../data/Robjects/QC_Part2.csv",row.names=1,stringsAsFactors=FALSE)
+qcMets <- read.csv("../../data/Tumorigenesis/Robjects/QC_Part2.csv",row.names=1,stringsAsFactors=FALSE)
 rmCells <- qcMets$barcode[qcMets$isDoubletFinal | qcMets$isRbc]
 
 sce <- sce[,!colnames(sce) %in% rmCells]
@@ -46,5 +46,5 @@ mnncor <- batchelor::fastMNN(sce1,sce2,sce3,
 
 # After correction
 out.final <- reducedDim(mnncor)
-saveRDS(out.final,"../data/Robjects/CorrectedPCA.rds")
-saveRDS(mnncor,"../data/Robjects/FullMNN.rds")
+saveRDS(out.final,"../../data/Tumorigenesis/Robjects/CorrectedPCA.rds")
+saveRDS(mnncor,"../../data/Tumorigenesis/Robjects/FullMNN.rds")
