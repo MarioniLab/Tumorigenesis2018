@@ -25,7 +25,7 @@ library(ggplot2)
 library(cowplot)
 library(Matrix)
 library(irlba)
-source("functions.R")
+source("../functions.R")
 theme_set(theme_cowplot())
 
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")

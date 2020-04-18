@@ -34,7 +34,7 @@ library(knitr)
 library(wesanderson)
 library(DT)
 library(edgeR)
-source("functions.R")
+source("../functions.R")
 theme_set(theme_cowplot())
 
 # Load Data

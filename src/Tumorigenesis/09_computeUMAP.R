@@ -6,7 +6,7 @@ library(umap)
 library(scran)
 library(igraph)
 library(BiocSingular)
-source("functions.R")
+source("../functions.R")
 
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
 # sce <- sce[,sample(ncol(sce),5000)]

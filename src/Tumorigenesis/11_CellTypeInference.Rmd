@@ -24,7 +24,7 @@ library(cowplot)
 library(Matrix)
 library(irlba)
 library(schex)
-source("functions.R")
+source("../functions.R")
 
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
 

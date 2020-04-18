@@ -2,7 +2,7 @@
 library(igraph)
 library(scran)
 library(Matrix)
-source("functions.R")
+source("../functions.R")
 
 # Load Data
 sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
