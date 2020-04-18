@@ -208,7 +208,7 @@ sceout <- SingleCellExperiment(assays=list(counts=m),
 
 keep <- rowSums(counts(sceout))>1
 sceout <- sceout[keep,]
-saveRDS(sceout,file="../data/combined_Robjects/SCE.rds")
+saveRDS(sceout,file="../data/Robjects/SCE.rds")
 ```
 
 ## Session Info

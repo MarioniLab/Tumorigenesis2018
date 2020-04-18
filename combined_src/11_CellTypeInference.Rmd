@@ -26,10 +26,10 @@ library(irlba)
 library(schex)
 source("functions.R")
 
-sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
 
-umap <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../data/combined_Robjects/Clusters_w6.csv",stringsAsFactors=FALSE)[,-1]
+umap <- read.csv("../data/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../data/Robjects/Clusters_w6.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,umap$barcode]
 pD <- data.frame(colData(sce))
@@ -193,7 +193,7 @@ plotUMAP(sce, colour_by="Groups", text_by="CellTypes")
 - As this will be the final annotation, I will one last time check that none of the clusters is funny in terms of QC criteria
 
 ```{r, fig.width=10, fig.height=3, warning=FALSE, message=FALSE}
-extraQC <- read.csv("../data/combined_Robjects/QC_Part2.csv")[,-1]
+extraQC <- read.csv("../data/Robjects/QC_Part2.csv")[,-1]
 rownames(extraQC) <- extraQC$barcode
 extraQC <- extraQC[sce$barcode,]
 sce$DbltScore <- extraQC$DbltScore
@@ -310,7 +310,7 @@ ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Mxd?"))
 - Sub Clustering with SNN and louvain
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce.sub <- sce[,sce$CellTypes=="Mxd?"]
-m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+m.cor <- readRDS("../data/Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[sce.sub$barcode,]
 
 ump.cor <- umap::umap(m.cor, random_state=42)
@@ -415,7 +415,7 @@ ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Tc.Cd8.
 - Sub Clustering with SNN and louvain
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce.sub <- sce[,sce$CellTypes=="Tc.Cd8.1"]
-m.cor <- readRDS("../data/combined_Robjects/CorrectedPCA.rds")
+m.cor <- readRDS("../data/Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[sce.sub$barcode,]
 
 ump.cor <- umap::umap(m.cor, random_state=42)
@@ -580,6 +580,6 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
 ```
 # Final Annotation and Save
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-saveRDS(sce,file="../data/combined_Robjects/SCE_final.rds")
+saveRDS(sce,file="../data/Robjects/SCE_final.rds")
 sessionInfo()
 ```

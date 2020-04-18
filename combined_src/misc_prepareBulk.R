@@ -37,4 +37,4 @@ gene.data <- gene.data[rownames(counts),]
 out <- list("counts"=counts,
 	    "pDat"=pDat,
 	    "fDat"=gene.data)
-saveRDS(out,"../data/combined_Robjects/DMBA_Bulk.rds")
+saveRDS(out,"../data/Robjects/DMBA_Bulk.rds")

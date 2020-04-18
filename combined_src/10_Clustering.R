@@ -5,12 +5,12 @@ library(Matrix)
 source("functions.R")
 
 # Load Data
-sce <- readRDS("../data/combined_Robjects/SCE_QC_norm.rds")
-ump <- read.csv("../data/combined_Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
+sce <- readRDS("../data/Robjects/SCE_QC_norm.rds")
+ump <- read.csv("../data/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
 sce <- sce[,ump$barcode] # this ensure the right order and cells for the umap graph below
 
 # Graph
-umapgraph <- readRDS("../data/combined_Robjects/UMAP_graphs.rds")
+umapgraph <- readRDS("../data/Robjects/UMAP_graphs.rds")
 igr.cor <- umapgraph[["Corrected"]]
 
 # ---- Based on UMAP Graph ----
@@ -30,4 +30,4 @@ sce$Cluster <- merged$NewCluster
 # ---- Save ----
 out <- colData(sce)
 out$Cluster <- paste0("C",as.numeric(out$Cluster))
-write.csv(out[,c("barcode","Cluster")],"../data/combined_Robjects/Clusters_w6.csv")
+write.csv(out[,c("barcode","Cluster")],"../data/Robjects/Clusters_w6.csv")

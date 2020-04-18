@@ -1,7 +1,7 @@
 library(scran)
 library(BiocSingular)
 library(BiocParallel)
-sce <- readRDS(file="../data/combined_Robjects/SCE_QC.rds")
+sce <- readRDS(file="../data/Robjects/SCE_QC.rds")
 
 # Split into two batches
 sce1 <- sce[,sce$Batch==1]
@@ -32,4 +32,4 @@ plot(log10(sizeFactors(sce3)),log10(colSums(counts(sce3))),pch=19,xlab="Log(Size
 #multiBatchNorm
 scemnorm <- batchelor::multiBatchNorm(sce1,sce2,sce3)
 sceout <- cbind(scemnorm[[1]],scemnorm[[2]],scemnorm[[3]])
-saveRDS(sceout,file="../data/combined_Robjects/SCE_QC_norm.rds")
+saveRDS(sceout,file="../data/Robjects/SCE_QC_norm.rds")
