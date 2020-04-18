@@ -1,4 +1,6 @@
 #!/bin/bash
+# 1 Argument home directory of singularity instance: abosulte path to /src
+# 2 Argument working directory of singularity instance: abosulte path to /src/Tumorigenesis
 hd=$1
 wd=$2
 singularity exec -c -H $hd ../Container/Tumorigenesis.sif Rscript -e "rmarkdown::render('$wd/01_MakeCountMatrix.Rmd')" &&\
