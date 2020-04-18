@@ -173,15 +173,15 @@ mark <- findMarkers(sce,sce$Cluster,pval.type="all")
 celltypes <- c(1:50)
 celltypes <- paste0("C",celltypes)
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
-names(celltypes) <- c("Tm1","Nk","Mxd?","Fb1","Ec1",
+names(celltypes) <- c("Tm1","Nk","MxdQ","Fb1","Ec1",
 		      "Tc.Cd8.1","Mp1","Hs","Bc","Peryc",
 		      "Ec2","Ec3","Avp","Dc209","Fb2",
 		      "BslDbl","Tam1","Np","Fb3","Tm2",
 		      "Mp2","Swc","Caf1","Dcs","Lp",
-		      "Tam2","Bsl1","Bsl2","Fb4","Tc.Th2?",
+		      "Tam2","Bsl1","Bsl2","Fb4","Tc.Th2Q",
 		      "Pc","Fb5","Tc.Cd8.2","Avd","Fb6",
-		      "Fb7","Dbl?","Peryc","Dc.Ccr7","Ilc2?",
-		      "LyEc","Uk?","Ec3","Fb8","Mst",
+		      "Fb7","DblQ","Peryc","Dc.Ccr7","Ilc2Q",
+		      "LyEc","UkQ","Ec3","Fb8","Mst",
 		      "Fb9","pDC","BasoGata2","Fb10","Tc.Cd8.3")
 
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
@@ -283,12 +283,12 @@ plotExpression(sce, x="CellTypes", features=c("Cd79a"))
 plotExpression(sce, x="CellTypes", features=c("Col3a1"))
 ```
 
-### Dbl?
+### DblQ
 - a luminal basal state
 - no gene that marks it
 - Very low number of cells, possibly true doublets
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Dbl?")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="DblQ")) +
     geom_point()
 ```
 
@@ -299,17 +299,17 @@ plotExpression(sce, x="CellTypes", features=c("Krt8"))
 
 ## Difficult Clusters
 
-### Mxd?
+### MxdQ
 - Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="Mxd?")) +
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="MxdQ")) +
     geom_point()
 ```
 
 - Sub Clustering with SNN and louvain
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-sce.sub <- sce[,sce$CellTypes=="Mxd?"]
+sce.sub <- sce[,sce$CellTypes=="MxdQ"]
 m.cor <- readRDS("../../data/Tumorigenesis/Robjects/CorrectedPCA.rds")
 m.cor <- m.cor[sce.sub$barcode,]
 
@@ -404,7 +404,7 @@ sce$CellTypes[sce$barcode %in% rmc] <- "Dmgd"
 sce$Groups[sce$CellTypes=="Bcs.1"] <- "Lymphoid"
 ```
 
-### Tc.Cd8.1?
+### Tc.Cd8.1Q
 - Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
@@ -516,12 +516,12 @@ sce$CellTypes[sce$barcode %in% TcPer] <- "TcPer"
 
 - Clean Up, removing the doublets and damaged cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-rmClusters <- c("Dmgd","Dbls","BslDbl","EpiDbl","FbDbl","BtDbl","Dbl?","Fb9")
+rmClusters <- c("Dmgd","Dbls","BslDbl","EpiDbl","FbDbl","BtDbl","DblQ","Fb9")
 sce <- sce[,!sce$CellTypes %in% rmClusters]
 plotUMAP(sce,text_by="CellTypes")
 ```
 
-- I finally run mergeCluster again as some of the clusters from Mxd? might have wrongly been split from other cells
+- I finally run mergeCluster again as some of the clusters from MxdQ might have wrongly been split from other cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 rmgenes <- rownames(sce)[!rowData(sce)$KeepForHvg]
@@ -529,11 +529,11 @@ merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes)
 unique(merged$NewCluster)
 ```
 
-- This suggests merging Mp1 with Mp1.1, Tam.1 with Tam1 and Mcs with Dcs?
+- This suggests merging Mp1 with Mp1.1, Tam.1 with Tam1 and Mcs with DcsQ
 - I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about TcCd81 and TcCd82, but will leave it like this for now)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce$CellTypes[sce$CellTypes %in% c("Tam.1")] <- "Tam1"
-sce$CellTypes[sce$CellTypes %in% c("Mcs")] <- "Dcs?"
+sce$CellTypes[sce$CellTypes %in% c("Mcs")] <- "DcsQ"
 sce$CellTypes[sce$CellTypes %in% c("Mp1.1")] <- "Mp1"
 sce$CellTypes <- factor(sce$CellTypes)
 ```
