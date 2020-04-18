@@ -1,0 +1,52 @@
+Bootstrap: docker
+From: ubuntu
+
+%help
+This Singularity container contains all the software necessary to run the linage tracing analysis.
+
+%files
+    /home/karsten/Cambridge/Tumorigenesis2018/Container/InstallPackages.R /Install.R
+    /home/karsten/Cambridge/Tumorigenesis2018/Container/ListOfPackages.txt /ListOfPackages.txt
+
+%post
+   apt-get -y update
+   apt-get -y install git curl wget rsync
+
+   #tzdata without interactive mode otherwise it crashes
+
+   # set noninteractive installation
+   export DEBIAN_FRONTEND=noninteractive
+   #install tzdata package
+   apt-get install -y tzdata
+
+   #needed for R package install
+   apt-get -y install libcurl4-openssl-dev libxml2-dev libssl-dev libudunits2-dev
+
+   #for r markdown documents
+   apt-get -y install pandoc imagemagick pandoc-citeproc
+
+   # R installation requires fortran compiler
+   apt-get -y install gcc-7 gfortran-7 #g++-7
+
+   # reqs for some of the packages
+   apt-get -y install  libpcre3-dev
+
+   # for h5
+   apt-get -y install libhdf5-dev libhdf5-cpp-100 libhdf5-100
+
+   #ubuntu 18.04 specific issue for apt-get build-dep, this is required to build R from source
+   sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
+   apt-get update
+   apt-get -y build-dep r-base r-base-dev
+
+   #install R (newest often not on apt)
+   cd /
+   wget https://cran.r-project.org/src/base/R-3/R-3.6.3.tar.gz
+   tar -xzf R-3.6.3.tar.gz
+   cd R-3.6.3
+   sh ./tools/rsync-recommended
+   ./configure && make && make install
+
+   #Setup Path
+   export PATH="/R-3.6.3/bin/:$PATH"
+   Rscript /Install.R
