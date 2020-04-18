@@ -1,5 +1,5 @@
 #!/bin/bash
-# 1 Argument home directory of singularity instance: abosulte path to /src
+# 1 Argument home directory of singularity instance: abosulte path to repository (must contain the singularity image
 # 2 Argument working directory of singularity instance: abosulte path to /src/Tumorigenesis
 hd=$1
 wd=$2
