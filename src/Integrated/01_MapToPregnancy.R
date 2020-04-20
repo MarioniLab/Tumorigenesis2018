@@ -23,8 +23,8 @@ sce <- sce[genes,]
 sce.g <- sce.g[genes,]
 
 # Sub Sample for testing
-# sce <- sce[,sample(ncol(sce),5000)]
-# sce.g <- sce.g[,sample(ncol(sce.g),5000)]
+sce <- sce[,sample(ncol(sce),5000)]
+sce.g <- sce.g[,sample(ncol(sce.g),5000)]
 
 # Scale normalization factors
 mBatch <- batchelor::multiBatchNorm(sce,sce.g)
@@ -38,6 +38,7 @@ pD1 <- data.frame(colData(sce))
 pD2 <- data.frame(colData(sce.g))
 pD2$CellTypes <- paste0("G_",pD2$CellTypes)
 pD2$Colors <- NA
+pD2$Age <- NA
 pD2$Batch <- as.numeric(as.character(pD2$Batch)) + 3 
 pD1$Batch <- as.numeric(as.character(pD1$Batch))
 
@@ -92,12 +93,15 @@ mnncor <- batchelor::fastMNN(sce1,sce2,sce3,sce4,sce5,
 		     correct.all=TRUE)
 print("Done MNN")
 
-m <- cbind(logcounts(sce1),logcounts(sce2),logcounts(sce3),
+mlog <- cbind(logcounts(sce1),logcounts(sce2),logcounts(sce3),
 	   logcounts(sce4),logcounts(sce5))
+m <- cbind(counts(sce1),counts(sce2),counts(sce3),
+	   counts(sce4),counts(sce5))
 rownames(pDout) <- pDout$barcode
 pDout <- DataFrame(pDout[colnames(mnncor),])
 colData(mnncor) <- pDout
-assays(mnncor) <- list("logcounts"=m,
+assays(mnncor) <- list("logcounts"=mlog,
+		       "counts"=m,
 		       "reconstructed"=assays(mnncor)[["reconstructed"]])
 
 # PCA
