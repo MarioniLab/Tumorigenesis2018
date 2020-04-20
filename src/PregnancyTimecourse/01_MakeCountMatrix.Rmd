@@ -31,7 +31,7 @@ theme_set(theme_cowplot())
 
 smps <- list.files("../../data/Pregnancy/CellRangerOutput/")
 smps <- grep("[0-9]$",smps,value=TRUE)
-fnames <- paste0("../../data/Pregnancy/PCellRangerOutput/",smps,"/raw")
+fnames <- paste0("../../data/Pregnancy/CellRangerOutput/",smps,"/raw")
 
 out <- bplapply(fnames, function(fle) {
     nm <- gsub("../../data/Pregnancy/CellRangerOutput/|/raw","",fle)

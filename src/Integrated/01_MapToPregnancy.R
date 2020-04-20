@@ -10,11 +10,11 @@ source("../functions.R")
 
 
 # Read in Tumorigenesis Data
-sce <- readRDS("../../data/combined_Robjects/SCE_final.rds")
+sce <- readRDS("../../data/Tumorigenesis/Robjects/SCE_final.rds")
 colnames(sce) <- sce$barcode # not sure why it wasn't like this in the first place
 		      
 # Read in Pregnancy Data
-sce.g <- readRDS("../../data/combined_Robjects/SCE_final_Pregnancy.rds")
+sce.g <- readRDS("../../data/Pregnancy/Robjects/SCE_final.rds")
 
 print("Read in data")
 # Subset to same genes
@@ -104,8 +104,8 @@ assays(mnncor) <- list("logcounts"=m,
 m.cor <- reducedDim(mnncor)
 
 # Save correction
-saveRDS(m.cor,"../../data/combined_Robjects/Pregnancy_CorrectedPCA.rds")
-saveRDS(mnncor,"../../data/combined_Robjects/Pregnancy_FullMNN.rds")
+saveRDS(m.cor,"../../data/Integrated/Robjects/Pregnancy_CorrectedPCA.rds")
+saveRDS(mnncor,"../../data/Integrated/Robjects/Pregnancy_FullMNN.rds")
 
 # Compute UMAP for whole dataset
 ump.cor <- umap(m.cor, random_state=42)
@@ -117,5 +117,5 @@ igr.cor <- get_umap_graph(ump.cor)
 
 
 # Save UMAP
-saveRDS(igr.cor,"../../data/combined_Robjects/PregnancyUMAP_graph.rds")
-write.csv(out,file="../../data/combined_Robjects/PregnancyUMAP_corrected.csv")
+saveRDS(igr.cor,"../../data/Integrated/Robjects/PregnancyUMAP_graph.rds")
+write.csv(out,file="../../data/Integrated/Robjects/PregnancyUMAP_corrected.csv")

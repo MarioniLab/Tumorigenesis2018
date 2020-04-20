@@ -37,7 +37,7 @@ library(viridis)
 theme_set(theme_cowplot())
 
 # Read in data
-ddata <- readRDS("../../data/Robjects/DoubletData.rds")
+ddata <- readRDS("../../data/Tumorigenesis/Robjects/DoubletData.rds")
 
 # Add sample index to data frames
 # Also I am log transforming the scores here already

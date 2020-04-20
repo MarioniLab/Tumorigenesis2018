@@ -8,7 +8,7 @@ library(BiocSingular)
 library(BiocNeighbors)
 
 # Read in Data
-sce <- readRDS("../../data/Robjects/SCE_QC_norm.rds")
+sce <- readRDS("../../data/Tumorigenesis/Robjects/SCE_QC_norm.rds")
 # sce <- sce[,sample(1:ncol(sce),20000)]
 # Split into batch1 and batch2 
 
@@ -49,4 +49,4 @@ ump <- umap(pca.cor, random_state=42)
 reducedDim(mnncor,type="umap") <- ump$layout[,1:2]
 
 # Save
-saveRDS(mnncor,"../../data/Robjects/Corrected_preDoublet.rds")
+saveRDS(mnncor,"../../data/Tumorigenesis/Robjects/Corrected_preDoublet.rds")

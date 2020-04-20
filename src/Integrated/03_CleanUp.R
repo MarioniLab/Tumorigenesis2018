@@ -2,14 +2,14 @@ library(scran)
 library(scater)
 
 # Combined SCE
-sce <- readRDS("../../data/combined_Robjects/Pregnancy_FullMNN.rds")
+sce <- readRDS("../../data/Integrated/Robjects/Pregnancy_FullMNN.rds")
 # UMAP
-ump <- read.csv("../../data/combined_Robjects/PregnancyUMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
+ump <- read.csv("../../data/Integrated/Robjects/PregnancyUMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
 # Read in TumorTime
-ptime <- read.csv("../../data/combined_Robjects/TumorTime.csv",stringsAsFactors=FALSE)[,-1]
+ptime <- read.csv("../../data/Tumorigenesis/Robjects/TumorTime.csv",stringsAsFactors=FALSE)[,-1]
 ptime$ptime <- round(ptime$ptime,1)
 # Read in Clustering results
-cluster <- read.csv("../../data/combined_Robjects/PregnancyClusters_.csv",stringsAsFactors=FALSE)[,-1]
+cluster <- read.csv("../../data/Integrated/Robjects/PregnancyClusters.csv",stringsAsFactors=FALSE)[,-1]
 
 # Put everything in pD
 pD <- data.frame(colData(sce))
@@ -58,4 +58,4 @@ pD$Condition <- factor(pD$Condition, levels=c("Control","4.5dG",
 
 stopifnot(identical(rownames(pD),colnames(sce)))
 colData(sce) <- DataFrame(pD)
-saveRDS(sce,file="../../data/combined_Robjects/SCE_combined.rds")
+saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined.rds")

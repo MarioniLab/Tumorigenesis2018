@@ -31,7 +31,7 @@ theme_set(theme_cowplot())
 sce <- readRDS("../../data/Pregnancy/Robjects/SCE_QC_norm.rds")
 
 umap <- read.csv("../../data/Pregnancy/Robjects/UMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
-clst <- read.csv("../../data/Pregnancy/Robjects/Clusters_stepsize6.csv",stringsAsFactors=FALSE)[,-1]
+clst <- read.csv("../../data/Pregnancy/Robjects/Clusters_stepsize7.csv",stringsAsFactors=FALSE)[,-1]
 anno <- left_join(umap,clst)
 sce <- sce[,anno$barcode]
 pD <- data.frame(colData(sce))

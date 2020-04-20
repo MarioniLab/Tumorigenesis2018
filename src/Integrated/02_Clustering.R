@@ -5,10 +5,10 @@ library(Matrix)
 source("../functions.R")
 
 # Load Data
-sce <- readRDS("../../data/combined_Robjects/Pregnancy_FullMNN.rds")
+sce <- readRDS("../../data/Integrated/Robjects/Pregnancy_FullMNN.rds")
 
 # Graph
-igr.cor <- readRDS("../../data/combined_Robjects/PregnancyUMAP_graph.rds")
+igr.cor <- readRDS("../../data/Integrated/Robjects/PregnancyUMAP_graph.rds")
 
 # ---- Based on UMAP Graph ----
 # Clustering with walktrap on the UMAP graph
@@ -18,7 +18,7 @@ cl.ump.wktrp <- paste0("C",ump.wktrp$membership)
 
 
 # ---- Merge Clusters ----
-rD <- rowData(readRDS("../../data/combined_Robjects/SCE_QC_norm.rds"))
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE_QC_norm.rds"))
 rmgenes <- rownames(rD)[!rD$KeepForHvg]
 rmgenes <- rownames(sce) %in% rmgenes
 sce$Cluster <- cl.ump.wktrp
@@ -29,4 +29,4 @@ sce$Cluster <- merged$NewCluster
 # ---- Save ----
 out <- colData(sce)
 out$Cluster <- paste0("C",as.numeric(out$Cluster))
-write.csv(out[,c("barcode","Cluster")],"../../data/combined_Robjects/PregnancyClusters_.csv")
+write.csv(out[,c("barcode","Cluster")],"../../data/Integrated/Robjects/PregnancyClusters.csv")

@@ -27,9 +27,9 @@ library(schex)
 library(ggplot2)
 source("../functions.R")
 
-sce <- readRDS("../../data/combined_Robjects/SCE_combined.rds")
+sce <- readRDS("../../data/Integrated/Robjects/SCE_combined.rds")
 
-rD <- rowData(readRDS("../../data/combined_Robjects/SCE.rds"))
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
 rmgenes <- rownames(rD)[!rD$KeepForHvg]
 rmgenes <- rownames(sce)[rownames(sce) %in% rmgenes]
 ```
@@ -468,6 +468,6 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypesFinal)) +
 
 # Final Annotation and Save
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-saveRDS(sce,file="../../data/combined_Robjects/SCE_combined_final.rds")
+saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined_final.rds")
 sessionInfo()
 ```
