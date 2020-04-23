@@ -169,13 +169,13 @@ names(celltypes) <- c("Tm","Fb1","Tc1","Np","Bsl1",#5
 		      "Bsl2","Ec3","Peryc1","Swc","TcCTL",#15
 		      "TcNk","Fb2","Fb3","Hsp","Peryc2",#20
 
-		      "Hs","Fb4","Mp2","Mp1","Tam1",#25
+		      "Hs","Fb4","Mp2","Mp1Uk","Tam1",#25
 		      "Tam2","Bcs","Ec4","TcNaive","BslG",#30
 
-		      "Fb5Att","Dc209","Fb6","Mp2b","Pc",#35
+		      "Fb5Att","cDC2","Fb6","Mp2Sec","Pc",#35
 		      "DcCcr7","Tc5","DcsMbe","TcMem","Lp",#40
 
-		      "Mst","Fb7","Mp1b","Fb8","Mcs",#45
+		      "Mst","Fb7","Mp1","Fb8","Mcs",#45
 		      "Fb9")
 
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
@@ -406,6 +406,7 @@ sce$CellTypes[sce$CellTypes=="TcNaive1"] <- "Tcregs"
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
+merged$NumberDE["Mp1",]
 ```
 
 - This suggests merging some of the Lps in seperate groups
@@ -416,8 +417,9 @@ sce$CellTypesFinal[sce$CellTypesFinal=="Lp10.Lp11.Lp7.Lp12.Lp6.Lp2.Lp4"] <- "Lp"
 sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp13.Lp3"] <- "Avd"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp5"] <- "Avp1"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp14"] <- "Avp2"
-sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "Mcs2"
-#sce$CellTypesFinal[sce$CellTypesFinal=="Hs.Hsp"] <- sce$CellTypes[sce$CellTypes%in% c("Hs","Hsp")]
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MyUk"
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
+sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mono"
 sce$CellTypesFinal[sce$CellTypesFinal=="TcCd8Mem.TcMem.TcCTL.TcNaive4.TcNaive7.TcNaive3.TcNaive5.TcNaive6.Tcregs"] <- sce$CellTypes[sce$CellTypes%in% c("TcCd8Mem","TcMem","TcCTL","TcNaive4","TcNaive7","TcNaive3","TcNaive5","TcNaive6","Tcregs")]
 sce$CellTypesFinal[sce$CellTypesFinal=="Fb3.Fb8"] <- "Fb3"
 ```
