@@ -36,11 +36,11 @@ rm(mBatch)
 # Extract ColData and combine
 pD1 <- data.frame(colData(sce))
 pD2 <- data.frame(colData(sce.g))
-pD2$CellTypes <- paste0("G_",pD2$CellTypes)
-pD2$Colors <- NA
 pD2$Age <- NA
 pD2$Batch <- as.numeric(as.character(pD2$Batch)) + 3 
 pD1$Batch <- as.numeric(as.character(pD1$Batch))
+pD1$Experiment <- "Tumorigenesis"
+pD2$Experiment <- "Pregnancy"
 
 cols <- intersect(colnames(pD1),colnames(pD2))
 cols <- cols[!grepl("UMAP",cols)] # One of them had the UMAP in there

@@ -163,19 +163,19 @@ celltypes <- c(1:46)
 celltypes <- paste0("C",celltypes)
 
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
-names(celltypes) <- c("Tm","Fb1","Tc1","Np","Bsl1",#5
-		      "Hs","Ec1","Tc2CyclMbe","Avp","Ec2",#10
+names(celltypes) <- c("Tm","Fb1","Th17","Np","Bsl1",#5
+		      "Hs","Ec1","TcCycl","Avp","Ec2",#10
 
 		      "Bsl2","Ec3","Peryc1","Swc","TcCTL",#15
 		      "TcNk","Fb2","Fb3","Hsp","Peryc2",#20
 
-		      "Hs","Fb4","Mp2","Mp1","Tam1",#25
+		      "Hs","Fb4","Mp2","Mp1Uk","Tam1",#25
 		      "Tam2","Bcs","Ec4","TcNaive","BslG",#30
 
-		      "Fb5Att","Dc209","Fb6","Mp2b","Pc",#35
-		      "DcCcr7","Tc5","DcsMbe","TcMem","Lp",#40
+		      "Fb5Att","cDC2","Fb6","Mp2Sec","Pc",#35
+		      "DcCcr7","TmemCd8","DcsMbe","TmemCd4","Lp",#40
 
-		      "Mst","Fb7","Mp1b","Fb8","Mcs",#45
+		      "Mst","Fb7","Mp1","Fb8","Mcs",#45
 		      "Fb9")
 
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
@@ -383,13 +383,14 @@ plotExpression(sce.sub,x="SubCluster","Ctla4")
 plotExpression(sce.sub,x="SubCluster","Tnfrsf18")
 ```
 
-- 2 are Tmem
-- Ccr7, Lef1
+- 2,4-6 are grouped based on Cd8
 ```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
-head(data.frame(mark.sub[["2"]]),10)
-plotExpression(sce.sub,x="SubCluster","Lef1")
 plotExpression(sce.sub,x="SubCluster","Cd8a")
-plotExpression(sce.sub,x="SubCluster","Ccr7")
+```
+
+- 3,7 are grouped based on Cd4
+```{r, fig.width=12, fig.height=3, warning=FALSE, message=FALSE}
+plotExpression(sce.sub,x="SubCluster","Cd4")
 ```
 
 
@@ -397,8 +398,9 @@ plotExpression(sce.sub,x="SubCluster","Ccr7")
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
 sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
-sce$CellTypes[sce$CellTypes=="TcNaive2"] <- "TcCd8Mem"
-sce$CellTypes[sce$CellTypes=="TcNaive1"] <- "Tcregs"
+sce$CellTypes[sce$CellTypes=="TcNaive1"] <- "Tregs"
+sce$CellTypes[sce$CellTypes %in% c("TcNaive2","TcNaive4","TcNaive5","TcNaive6")] <- "TcNaiveCd8"
+sce$CellTypes[sce$CellTypes %in% c("TcNaive3","TcNaive7")] <- "TcNaiveCd4"
 ```
 
 # Merging
@@ -406,6 +408,7 @@ sce$CellTypes[sce$CellTypes=="TcNaive1"] <- "Tcregs"
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
+merged$NumberDE["Mp1",]
 ```
 
 - This suggests merging some of the Lps in seperate groups
@@ -416,9 +419,10 @@ sce$CellTypesFinal[sce$CellTypesFinal=="Lp10.Lp11.Lp7.Lp12.Lp6.Lp2.Lp4"] <- "Lp"
 sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp13.Lp3"] <- "Avd"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp5"] <- "Avp1"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp14"] <- "Avp2"
-sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "Mcs2"
-#sce$CellTypesFinal[sce$CellTypesFinal=="Hs.Hsp"] <- sce$CellTypes[sce$CellTypes%in% c("Hs","Hsp")]
-sce$CellTypesFinal[sce$CellTypesFinal=="TcCd8Mem.TcMem.TcCTL.TcNaive4.TcNaive7.TcNaive3.TcNaive5.TcNaive6.Tcregs"] <- sce$CellTypes[sce$CellTypes%in% c("TcCd8Mem","TcMem","TcCTL","TcNaive4","TcNaive7","TcNaive3","TcNaive5","TcNaive6","Tcregs")]
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MyUk"
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
+sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mono"
+sce$CellTypesFinal[sce$CellTypesFinal=="TcNaiveCd4.TcNaiveCd8.Tregs.TmemCd4"] <- sce$CellTypes[sce$CellTypes%in% c("TcNaiveCd4","TcNaiveCd8","Tregs","TmemCd4")]
 sce$CellTypesFinal[sce$CellTypesFinal=="Fb3.Fb8"] <- "Fb3"
 ```
 
