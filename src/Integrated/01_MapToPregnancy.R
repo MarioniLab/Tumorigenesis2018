@@ -23,8 +23,8 @@ sce <- sce[genes,]
 sce.g <- sce.g[genes,]
 
 # Sub Sample for testing
-sce <- sce[,sample(ncol(sce),5000)]
-sce.g <- sce.g[,sample(ncol(sce.g),5000)]
+# sce <- sce[,sample(ncol(sce),5000)]
+# sce.g <- sce.g[,sample(ncol(sce.g),5000)]
 
 # Scale normalization factors
 mBatch <- batchelor::multiBatchNorm(sce,sce.g)
