@@ -6,12 +6,14 @@ sce <- readRDS("../../data/Integrated/Robjects/Pregnancy_FullMNN.rds")
 # UMAP
 ump <- read.csv("../../data/Integrated/Robjects/PregnancyUMAP_corrected.csv",stringsAsFactors=FALSE)[,-1]
 
+cluster <- read.csv("../../data/Integrated/Robjects/PregnancyClusters.csv",stringsAsFactors=FALSE)[,-1]
 # Put everything in pD
 pD <- data.frame(colData(sce))
 rmcols <- c("PassLibSize", "PassGenesDetected", "PassViability", "PassTrend",
-	    "PassAll", "Barcode")
+	    "PassAll", "Barcode","Cluster","CellTypes","Groups","MajorGroups")
 pD <- pD[,! (colnames(pD) %in% rmcols)]
 pD <- dplyr::left_join(pD,ump)
+pD <- dplyr::left_join(pD,cluster)
 reducedDim(sce,type="UMAP") <- pD[,c("UMAP1","UMAP2")]
 
 #Randomize order for plotting
