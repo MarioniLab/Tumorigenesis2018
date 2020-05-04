@@ -26,18 +26,3 @@ Tree <- randomForest(x=as.matrix(t(train.data)),y=train.labls,
              xtest=as.matrix(t(test.data)),ytest=test.labls,keep.forest=TRUE)
 
 saveRDS(Tree, "../../data/Integrated/Robjects/Tree.rds")
-# Confusion matrix
-# conf <- Tree$confusion
-# conf[order(conf[,"class.error"]),]
-
-
-# Variable importance
-# fp <- Tree
-# varImpPlot(fp,
-#        sort=T,
-#        n.var=55,
-#        main="Top 50 - Variable Importance")
-
-
-# ---- Classify new data ----
-# pred <- predict(object=Tree, newdata=t(m.sub)) 
