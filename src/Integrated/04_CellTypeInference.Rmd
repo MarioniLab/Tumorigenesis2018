@@ -275,31 +275,38 @@ ump.cor <- umap::umap(m.cor, random_state=42)
 reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
 set.seed(42)
 igr <- buildSNNGraph(t(m.cor))
-subc <- igraph::cluster_louvain(igr)
+subc <- igraph::cluster_walktrap(igr,steps=20)
 sce.sub$SubCluster <- factor(subc$membership)
-plotUMAP(sce.sub,colour_by="Csn2")
+p1 <- plotUMAP(sce.sub,colour_by="SubCluster",text_by="SubCluster")
 mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
 			block=sce.sub$Batch,
 			pval.type="all",
 			direction="up",
 			subset.row=!rownames(sce.sub)%in% rmgenes)
+mark.sig <- lapply(mark.sub,function(x) data.frame(x)[x$FDR<0.01,])
 ```
 
--1 is Immune/LP doublet
+-4, 10 is Immune/LP doublet
+-17 are Immune cells will be kept seperately
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Cd74")
+#plotExpression(sce.sub,x="SubCluster","Csn2")
+#plotUMAP(sce.sub,colour_by="Csn2",text_by="SubCluster")
 ```
 
--8 and 9 are Fb doublet
+-7, 13,15 and 16 are Fb doublet
+- 12 is Fb but also some Krts etc.
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-plotExpression(sce.sub,x="SubCluster","Col3a1")
+features <- c("Csn2","Aldh1a3","Krt5","Col3a1","Cd74","Cited1","Krt8")
+p0 <- plotExpression(sce.sub,x="SubCluster",features)
 ```
 
 - I remove 1,8 and 9 and the rest is kept as possible sub Lp clusters, but might me merged below
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
 sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
-rmCells <- c(rmCells,sce.sub$barcode[sce.sub$SubCluster %in% c("1","8","9")])
+rmCells <- c(rmCells,sce.sub$barcode[sce.sub$SubCluster %in% c("4","12","10",
+							       "7","13",
+							       "15","16")])
 ```
 
 ### Mcs
@@ -415,10 +422,10 @@ merged$NumberDE["Mp1",]
 - I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about TcCd81 and TcCd82, but will leave it like this for now)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce$CellTypesFinal <- as.character(merged$NewCluster)
-sce$CellTypesFinal[sce$CellTypesFinal=="Lp10.Lp11.Lp7.Lp12.Lp6.Lp2.Lp4"] <- "Lp"
-sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp13.Lp3"] <- "Avd"
-sce$CellTypesFinal[sce$CellTypesFinal=="Lp5"] <- "Avp1"
-sce$CellTypesFinal[sce$CellTypesFinal=="Lp14"] <- "Avp2"
+sce$CellTypesFinal[sce$CellTypesFinal=="Lp1.Lp5.Lp6.Lp3.Lp9.Lp8"] <- "Lp"
+sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp11.Lp14"] <- "Avd"
+sce$CellTypesFinal[sce$CellTypesFinal=="Lp2"] <- "LpBsl"
+sce$CellTypesFinal[sce$CellTypesFinal=="Lp17.Pc"] <- "Pc"
 sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MyUk"
 sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
 sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mono"
