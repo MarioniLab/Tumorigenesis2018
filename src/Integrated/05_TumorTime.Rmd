@@ -40,7 +40,8 @@ theme_set(theme_cowplot())
 # Load Data
 sce <- readRDS("../../data/Integrated/Robjects/SCE_combined_final.rds")
 sce <- sce[,sce$Experiment=="Tumorigenesis"]
-sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
+# Excluding WT and p53 wt
+sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1","WKBR76.5f","WKBR76.5c")]
 sce$CellTypes <- sce$CellTypesFinal
 sce$Batch <- as.character(sce$Batch)
 sce$Age <- as.character(sce$Age)
@@ -698,13 +699,19 @@ ggplot(sumry, aes(x=as.numeric(Ptime), ymin=cumfrac-frac, ymax=cumfrac,
     geom_ribbon() +
     scale_fill_manual(values=unique(sumry$Colors)) +
     xlab("Tumor Development") +
-    ylab("Fraction of Cells") 
+    ylab("Fraction of Cells") +
+    theme(legend.position="bottom")
 
 ```
 
 # Session Info and Save
 ```{r, message=FALSE, warning=FALSE}
 out <- pcs.all[,c("Condition","ptime")]
+out.nt <- out[!grepl("TM",out$Condition),]
+out.t <- out[grepl("TM",out$Condition),]
+out.nt$ptimeBin <- cut(out.nt$ptime,4,labels=c(1,2,3,4))
+out.t$ptimeBin <- 5
+out <- rbind(out.nt,out.t)
 write.csv(out,"../../data/Integrated/Robjects/TumorTime.csv")
 sessionInfo()
 ```
