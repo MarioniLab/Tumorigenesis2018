@@ -14,9 +14,10 @@ pD.t <- data.frame(colData(sce[,sce$Experiment=="Tumorigenesis"]))
 pD.t <- dplyr::right_join(pD.t,ttime)
 colnames(pD.t)[colnames(pD.t)=="barcode"] <- "id" # for WOT
 pca.tum <- pca.tum[pD.t$id,]
+pD.t$ptime <- round(pD.t$ptime,1)
 
-write.csv(pca.tum,"../../data/Integrated/Tumor_Pca_for_WOT.txt",quote=FALSE,row.names=TRUE)
-write.csv(pD.t,"../../data/Integrated/Tumor_pD_for_WOT.txt",quote=FALSE,row.names=FALSE)
+write.csv(pca.tum,"../../data/Integrated/Robjects/Tumor_Pca_for_WOT.txt",quote=FALSE,row.names=TRUE)
+write.csv(pD.t,"../../data/Integrated/Robjects/Tumor_pD_for_WOT.txt",quote=FALSE,row.names=FALSE)
 
 # Pregnancy
 pca.preg <- readRDS("../../data/Pregnancy/Robjects/CorrectedPCA.rds")
@@ -27,5 +28,5 @@ pD$time <- as.numeric(as.character(plyr::mapvalues(pD$Condition,
 			   c("CTRL","4.5dG","9.5dG","14.5dG"),
 			   c(0,4.5,9.5,14.5))))
 
-write.csv(pca.preg,"../../data/Integrated/Preg_Pca_for_WOT.txt",quote=FALSE,row.names=TRUE)
-write.csv(pD,"../../data/Integrated/Preg_pD_for_WOT.txt",quote=FALSE,row.names=FALSE)
+write.csv(pca.preg,"../../data/Integrated/Robjects/Preg_Pca_for_WOT.txt",quote=FALSE,row.names=TRUE)
+write.csv(pD,"../../data/Integrated/Robjects/Preg_pD_for_WOT.txt",quote=FALSE,row.names=FALSE)
