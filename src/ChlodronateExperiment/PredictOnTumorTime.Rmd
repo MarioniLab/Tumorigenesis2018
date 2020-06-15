@@ -1,0 +1,250 @@
+---
+title: "Predict on Tumor Time PCA"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: journal
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# How do we define tumorigenesis
+
+```{r, message=FALSE, warning=FALSE}
+library(scran)
+library(scater)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rtsne)
+library(cowplot)
+library(Matrix)
+library(viridis)
+library(knitr)
+library(wesanderson)
+library(DT)
+library(edgeR)
+source("../functions.R")
+theme_set(theme_cowplot())
+
+# Load Data
+sce <- readRDS("../../data/combined_Robjects/SCE_final.rds")
+sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1")]
+colnames(sce) <- sce$barcode ### I have to fix this somewhere else
+pD <- data.frame(colData(sce))
+set.seed(42)
+pD <- pD[sample(nrow(pD),nrow(pD)),]
+```
+
+## Sample Overview
+These are the ages at which the WKBR animals were collected.
+This includes two tumors in the last two groups of two.
+```{r, message=FALSE, fig.width=6, fig.height=3}
+sumry <- group_by(pD, Batch, Age, Condition) %>%
+    summarize(n=n())
+
+sumry <- sumry[grepl("WKBR",sumry$Condition),]
+timeplt <- ggplot(sumry, aes(x=as.numeric(Age), y=0)) +
+    geom_segment(aes(x=25, y=0, xend=60, yend=0,
+		     color=NULL),
+                  arrow=arrow(length=unit(0.5, "cm"))) +
+    geom_segment(aes(x=30, y=0.05, xend=30, yend=0,
+		     color=NULL),
+                  arrow=arrow(length=unit(0.3, "cm"))) +
+    geom_dotplot(aes(fill=Batch, group=Batch), binwidth=1, 
+		 stackgroups=TRUE, binpositions="all") +
+    xlim(25,60) +
+    ylim(0,.5) +
+    scale_fill_manual(values=c("grey20","grey60","black"))  +
+    xlab("Age") +
+    ggtitle("Timepoints of Collection") +
+    theme(axis.title.y=element_blank(),
+	  axis.line.x=element_blank(),
+	  axis.line.y=element_blank(),
+	  axis.text.y=element_blank(),
+	  legend.position="none",
+	  axis.ticks.y=element_blank(),
+	  axis.ticks.x=element_line(size=1, linetype="solid"),
+	  axis.ticks.length.x=unit(.5,"cm"))
+timeplt
+```
+
+# Ideas
+We have mainly discussed two broad ideas.
+
+#### Based on Expression
+
+- In this approach we use the expression data directly in a way to derive some per-sample estimate of how close to tumor formation a sample is
+- Advantages
+    + Based on fairly light assumptions
+    + Simple
+    + Easy to interpret
+    + Depending on which method we use you could predict the "tumor stage" of external samples
+- Disadvantages
+    + Potential circularity when interpreting the results
+
+#### Based on Genomic Alterations
+
+- In this approach we first estimate CNAs based on the gene expression and then create a summary statistic that summarizes how "cancerous" the cells already are 
+- Advantages
+    + The "tumor time covariate" will be more independent from the data that will actually be analysed downstream
+- Disadvantages
+    + Not quite clear how to get a meaningful (in terms of "cancerousness") summary of CNA profiles across multiple cells
+    + Relationship between cancerousness and CNAs not quite clear
+    + Estimation of CNA from 10x data not trivial
+
+# Expression based
+In this section I will explore approaches that directly utilize the gene expression to estimate a pseudo-tumor time.
+
+## PCAs {.tabset .tabset-fade}
+After having compared PCAs on the various compartments, I found the one on either the whole data or epithelium only the most compelling ones.
+The disadvantage of using a subset is that it might appear biased, however I think it's hard to argue against using all epithelial.
+On the plus side using a subset might make analyses of other subsets independent of this ordering.
+However, this also only true to a certain extent if we are ignoring potential cross-talk between the signal in the epithelial compartment and the other compartments.
+```{r, message=FALSE, warning=FALSE}
+getPC <- function(sce, getPCObject=FALSE) {
+    sce.sum <- aggregateAcrossCells(sce,
+			  id=DataFrame(Condition=sce$Condition),
+			  use_exprs_values="counts",
+			  average=FALSE)
+
+    sce.counts <- counts(sce.sum)
+    y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+    keep <- filterByExpr(y.sce)
+    y.sce <- y.sce[keep,]
+    y.sce <- calcNormFactors(y.sce)
+
+    logcpm <- cpm(y.sce, log=TRUE)
+    # 
+    pD <- data.frame(colData(sce.sum))
+    #
+    pcs <- prcomp(t(logcpm))
+    pca <- data.frame(pcs$x)
+    pca[,"Condition"] <- pD$Condition
+    pca$Age <- pD$Age
+    pca$Batch <- pD$Batch
+    # pca$CellTypes <- y$samples$CellTypes
+    rownames(pca) <- pca$Condition
+    if (getPCObject) {
+	return(pcs)
+    } else {
+	return(pca)
+    }
+}
+
+plotPC <- function(pca) {
+    pcs <- as.matrix(pca[,grepl("PC",colnames(pca))])
+    vars <- apply(pcs,2,var)
+    rel.vars <- round(vars/sum(vars)*100,1)
+    # 
+    library(ggrepel)
+    pout <- ggplot(pca, aes(x=PC1, y=PC2, color=Age,label=Condition,shape=Batch)) +
+	    geom_text_repel(size=3) +
+	    geom_point(size=2) +
+	    xlab(paste0("PC1(",rel.vars[1],"%)")) +
+	    ylab(paste0("PC2(",rel.vars[2],"%)")) +
+	    theme_bw() +
+	    coord_fixed(1)
+    return(pout)
+}
+
+```
+# Chlodronate
+```{r, message=FALSE, warning=FALSE}
+sce.c <- readRDS("../../data/combined_Robjects/Chlodronate_SCE_QC.rds")
+```
+
+```{r, message=FALSE, warning=FALSE}
+# ReDo the PCA on all samples # and switch to ENSMBL IDs
+sce.sum <- aggregateAcrossCells(sce,
+		  id=DataFrame(Condition=sce$Condition),
+		  use_exprs_values=c("counts"),
+		  average=FALSE)
+#Remove genes that are not in the DMBA data
+sce.counts <- counts(sce.sum)
+y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+keep <- filterByExpr(y.sce)
+y.sce <- y.sce[keep,]
+y.sce <- calcNormFactors(y.sce)
+
+logcpm <- cpm(y.sce, log=TRUE)
+# 
+pcs.wkbr <- prcomp(t(logcpm))
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Predict Chlodronate data on top of it
+sce.c.sum <- aggregateAcrossCells(sce.c,
+		  id=DataFrame(Condition=sce.c$Condition),
+		  use_exprs_values=c("counts"),
+		  average=FALSE)
+# Set up DGEList
+
+y.c <- DGEList(counts=counts(sce.c.sum),samples=data.frame(colData(sce.c.sum)))
+# Normalize
+y.c <- y.c[rownames(logcpm),]
+y.c <- calcNormFactors(y.c)
+
+treated <- c("WKBR96.1e","WKBR89.4i","WKBR89.4j","WKBR96.1d")
+y.c$samples$Treatment <- ifelse(y.c$samples$Condition %in% treated,
+				"Chlodroante",
+				"Empty")
+# Get Log-Cpm
+logcpm.c <- cpm(y.c,log=TRUE)
+
+
+# PCA only on Chlodronate
+pcs <- prcomp(t(logcpm.c))
+
+pc1 <- pcs$rotation[,"PC1"]
+head(pc1[order(abs(pc1),decreasing=TRUE)],20)
+
+pca <- data.frame(pcs$x)
+pca[,"Condition"] <- y.c$samples$Condition
+pca$Treatment <- y.c$samples$Treatment
+
+pcs <- as.matrix(pca[,grepl("PC",colnames(pca))])
+vars <- apply(pcs,2,var)
+rel.vars <- round(vars/sum(vars)*100,1)
+# 
+library(ggrepel)
+ggplot(pca, aes(x=PC1, y=PC2, color=Treatment, label=Condition)) +
+	geom_text_repel(size=3) +
+	geom_point(size=2) +
+	xlab(paste0("PC1(",rel.vars[1],"%)")) +
+	ylab(paste0("PC2(",rel.vars[2],"%)")) +
+	theme_bw() +
+	coord_fixed(1)
+
+
+# Predict into previous PC space
+pcpredict <- predict(pcs.wkbr,t(logcpm.c))
+res <- y.c$samples[,c("Condition","Treatment")]
+res$PC1 <- -pcpredict[,1]
+res$PC2 <- pcpredict[,2]
+colnames(res)[1] <- "Condition"
+fplot <- data.frame("Condition"=sce.sum$Condition,
+		    "PC1"=-pcs.wkbr$x[,"PC1"],
+		    "PC2"=pcs.wkbr$x[,"PC2"],
+		    "Treatment"="None")
+
+fplot <- rbind(fplot,res)
+
+minpc1 <- min(fplot[fplot$Treatment=="None","PC1"])
+maxpc1 <- max(fplot[fplot$Treatment=="None","PC1"]-minpc1)
+fplot$ptime <- ((fplot$PC1-minpc1)/maxpc1) * 100
+
+fplot.wkbr <- fplot[fplot$Treatment=="None",]
+fplot.c <- fplot[fplot$Treatment!="None",]
+
+ggplot(fplot.c, aes(x=PC1, y=PC2)) +
+     geom_point(data=fplot.wkbr, color="grey80") +
+     geom_point(aes(color=Treatment),size=2) +
+     scale_color_manual(values=c("red","black")) +
+     coord_fixed(1)
+```
