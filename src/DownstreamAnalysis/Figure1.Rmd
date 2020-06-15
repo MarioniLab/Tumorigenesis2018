@@ -43,6 +43,7 @@ library(dplyr)
 library(edgeR)
 library(Matrix)
 library(ggrepel)
+library(ggrastr)
 library(viridis)
 theme_set(theme_cowplot())
 
@@ -54,10 +55,6 @@ sce.full$Groups <- factor(sce.full$Groups)
 
 sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
 ptime <- read.csv("../../data/Integrated/Robjects/TumorTime.csv")[,-1]
-
-##QUICK FIX REMOVE THIS
-ptime$ptimeBin[ptime$Condition %in% c("WKBR75.4bTM","WKBR61.4dTM")] <- 5
-##
 
 sce <- sce[,sce$Condition %in% ptime$Condition]
 pD <- data.frame(colData(sce))
@@ -127,11 +124,13 @@ pcs.all <- arrange(pcs.all,Age)
 # pcs.all$Age <- factor(pcs.all$Age,levels=c("30","33","38","41","46","48"))
 colrd <- pcs.all$cols
 names(colrd) <- pcs.all$Age
+pcs.all$Tumor <- grepl("TM",pcs.all$Condition)
+pcs.all$Tumor <- ifelse(pcs.all$Tumor,"Tumor","Mammary Gland")
 
-p1 <- ggplot(pcs.all, aes(x=PC1, y=PC2,fill=Age)) +
+p1 <- ggplot(pcs.all, aes(x=PC1, y=PC2,fill=Tumor)) +
     geom_point(size=4,pch=21) +
-    scale_fill_manual(values=colrd) +
-    guides(fill = guide_legend(title = "Age")) +
+    scale_fill_manual(values=c("grey80","grey30")) +
+    guides(fill = guide_legend(title = "")) +
     coord_fixed(1)
 p1
 ```
@@ -318,16 +317,11 @@ p1_col
 # UMAP
 The nice thing about the binning is that we can now more easily display the data in the form of UMAPs which quite pretty.
 ```{r, message=FALSE,warning=FALSE,fig.width=9,fig.height=6}
-# X <- model.matrix(~0+pD$Groups)
-# colnames(X) <- levels(pD$Groups)
-# X <- t(t(X)/colSums(X))
-# celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD[,c("UMAP1","UMAP2")])))
-# celltyp_ctrs$CellType <- rownames(celltyp_ctrs)
 
 pD$GroupColors <- plyr::mapvalues(pD$Groups,
 				levels(pD$Groups),
 				c("#00BFFF","#37A055","#3787C0","#F78757","#FF4E03",
-				  "#737373","#FF0303"))
+				  "#737373","#800080"))
 library(viridis)
 p0 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     geom_point(data=pD[,c("UMAP1","UMAP2")], color="grey80",size=.1,alpha=.2) +
@@ -388,7 +382,7 @@ sumry <- arrange(sumry, ptimeBin, CellTypes) %>%
     mutate(cumfrac=cumsum(frac)) %>%
     ungroup()
 
-barplt <- ggplot(sumry, aes(x=factor(ptimeBin,levels=c(6,5,4,3,2,1)), y=frac, fill=CellTypes)) +
+barplt <- ggplot(sumry, aes(x=factor(ptimeBin,levels=c(5,4,3,2,1)), y=frac, fill=CellTypes)) +
     geom_bar(stat="identity",color="black") +
     scale_fill_manual(values=unique(sumry$Colors)) +
     xlab("Tumortime Bin") +
@@ -428,8 +422,7 @@ ptime$ptimeBin <- as.factor(ptime$ptimeBin)
 ageplot <- ggplot(ptime, aes(x=ptimeBin, y=Age)) +
     stat_summary(fun.data="mean_sdl", fun.args = list(mult=1), 
 	    geom="errorbar", color="black", width=0.2) +
-    stat_summary(fun.y=mean, geom="point", color="black") +
-    coord_flip()
+    stat_summary(fun.y=mean, geom="point", color="black") 
 ageplot
 ```
 
@@ -441,13 +434,39 @@ ggsave(paste0(outdr,"AgePlot.svg"),ageplot)
 ggsave(paste0(outdr,"GOTerms.svg"),p.ld.2)
 ```
 
+```{r, message=FALSE, warning=FALSE,fig.width=7,fig.height=7}
+dpi <- 1200
+
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
+    geom_point_rast(size=.3, dpi=dpi) +
+    scale_color_manual(values=levels(pD$Color)) +
+    theme_void() +
+    theme(legend.position="none")
+
+ggsave(paste0(outdr,"CellTypesUMAP.png"),dpi=dpi)
+
+# With Annotation
+X <- model.matrix(~0+pD$CellTypes)
+colnames(X) <- levels(pD$CellTypes)
+X <- t(t(X)/colSums(X))
+celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD[,c("UMAP1","UMAP2")])))
+celltyp_ctrs$CellType <- rownames(celltyp_ctrs)
+
+ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
+    geom_point_rast(size=.3, dpi=dpi) +
+    scale_color_manual(values=levels(pD$Color)) +
+    geom_text_repel(data=celltyp_ctrs,aes(label=CellType,color=NULL)) +
+    theme(legend.position="none")
+ggsave(paste0(outdr,"CellTypesUMAP_WithLabels.png"),dpi=dpi)
+
+```
 
 # Split UMAPs into individual files
-```{r, message=FALSE, warning=FALSE,fig.width=14,fig.height=14}
+```{r, message=FALSE, warning=FALSE,fig.width=7,fig.height=7}
 pltUMAP <- function(pD.sub,pD) {
     p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-	geom_point(color="grey80",size=.1) +
-	geom_point(data=pD.sub, aes(color=Groups), size=.1) +
+	geom_point_rast(color="grey80",size=.3,dpi=dpi) +
+	geom_point_rast(data=pD.sub, aes(color=Groups), size=.3,dpi=900) +
 	scale_color_manual(values=levels(pD.sub$GroupColors)) +
 	theme_void() +
 	theme(legend.position="none")
@@ -458,12 +477,12 @@ pltUMAP <- function(pD.sub,pD) {
 pD$GroupColors <- plyr::mapvalues(pD$Groups,
 				levels(pD$Groups),
 				c("#00BFFF","#37A055","#3787C0","#F78757","#FF4E03",
-				  "#737373","#FF0303"))
+				  "#737373","#800080"))
 pDWt <- data.frame(colData(sce.full[,sce.full$Condition %in% c("CBLA1","CBLT","CTRL")]))
 pDWt$GroupColors <- plyr::mapvalues(pDWt$Groups,
 				levels(pDWt$Groups),
 				c("#00BFFF","#37A055","#3787C0","#F78757","#FF4E03",
-				  "#737373","#FF0303"))
+				  "#737373","#800080"))
 
 set.seed(42)
 # Select each pD individually and downsample
@@ -486,141 +505,25 @@ pDWtO <- pDWtO[sample(nrow(pDWtO),12000),]
 pDWtY <- pDWt[pDWt$Condition %in% c("CTRL"),]
 pDWtY <- pDWtY[sample(nrow(pDWtY),12000),]
 
-ggsave(paste0(outdr,"UMAP_Bin_1.svg"),pltUMAP(pD1,pD))
-ggsave(paste0(outdr,"UMAP_Bin_2.svg"),pltUMAP(pD2,pD))
-ggsave(paste0(outdr,"UMAP_Bin_3.svg"),pltUMAP(pD3,pD))
-ggsave(paste0(outdr,"UMAP_Bin_4.svg"),pltUMAP(pD4,pD))
-ggsave(paste0(outdr,"UMAP_Bin_5.svg"),pltUMAP(pD5,pD))
-ggsave(paste0(outdr,"UMAP_Bin_WT_Young.svg"),pltUMAP(pDWtY,pD))
-ggsave(paste0(outdr,"UMAP_Bin_WT_Old.svg"),pltUMAP(pDWtO,pD))
+
+ggsave(paste0(outdr,"UMAP_AllTumorigenesis.png"),pltUMAP(pD,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_1.png"),pltUMAP(pD1,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_2.png"),pltUMAP(pD2,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_3.png"),pltUMAP(pD3,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_4.png"),pltUMAP(pD4,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_5.png"),pltUMAP(pD5,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_WT_Young.png"),pltUMAP(pDWtY,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_WT_Old.png"),pltUMAP(pDWtO,pD),dpi=dpi)
 
 plot_grid(pltUMAP(pD1,pD) + ggtitle("1"),
-    pltUMAP(pD2,pD)+ ggtitle("2"),
-    pltUMAP(pD3,pD)+ ggtitle("3"),
-    pltUMAP(pD4,pD)+ ggtitle("4"),
-    pltUMAP(pD5,pD)+ ggtitle("5"),
-    pltUMAP(pDWtY,pD)+ ggtitle("WtY"),
-    pltUMAP(pDWtO,pD)+ ggtitle("WtO"))
-# guides(colour=guide_legend(title.position="top", override.aes = list(size=3))) +
-# theme(legend.position="bottom",
-#       legend.direction="horizontal",
-#       strip.text=element_text(size=14))
+	  pltUMAP(pD2,pD)+ ggtitle("2"),
+	  pltUMAP(pD3,pD)+ ggtitle("3"),
+	  pltUMAP(pD4,pD)+ ggtitle("4"),
+	  pltUMAP(pD5,pD)+ ggtitle("5"),
+	  pltUMAP(pDWtY,pD)+ ggtitle("WtY"),
+	  pltUMAP(pDWtO,pD)+ ggtitle("WtO"))
+guides(colour=guide_legend(title.position="top", override.aes = list(size=3))) +
+    theme(legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text=element_text(size=14))
 ```
-
-#Unused plots
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=7}
-p4
-```
-
-```{r, message=FALSE,warning=FALSE}
-ages <- group_by(pD, Age, Condition) %>%
-    summarize()
-ptime <- left_join(ptime,ages)
-ptime$Age <- as.numeric(ptime$Age)
-ptime$ptimeBin <- as.factor(ptime$ptimeBin)
-
-pbox <- ggplot(ptime, aes(x=ptimeBin, y=Age)) +
-    geom_boxplot()
-pbox
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=7}
-library(dplyr)
-# Ribbon plot
-pD <- data.frame(colData(sce))
-# pD <- left_join(pD,pcs.all[,c("Condition","ptime")])
-# colnames(pD)[colnames(pD)=="ptime"] <- "ptime"
-# pD <- pD[pD$MajorGroups %in% "Fibroblast",]
-pD <- droplevels(pD)
-sumry <- group_by(pD, ptimeBin, Groups) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() # %>%
-#     mutate(cumfrac=cumsum(frac)) %>%
-#     ungroup()
-
-# ggplot(sumry, aes(x=ptime, y=frac)) +
-#     geom_point() +
-#     facet_wrap(~CellTypes)
-
-comb <- table(sumry$Groups,sumry$ptimeBin) 
-missing.comb <- which(comb==0, arr.ind=TRUE)
-if (nrow(missing.comb)>0) {
-    add.missing <- data.frame("Groups"=rownames(missing.comb),
-		      "ptimeBin"=colnames(comb)[missing.comb[,"col"]],
-		      "frac"=0,
-		      "n"=0)
-    sumry <- rbind(sumry,add.missing)
-}
-
-sumry$Colors <- plyr::mapvalues(as.character(sumry$Groups),
-				as.character(unique(pD$Groups)),
-				c("#E0ECF7","#37A055","#3787C0","#FDCFBB","#ABCFE5",
-				  "#FEEDDB","#737373"))
-
-sumry <- arrange(sumry, ptimeBin, Groups) %>%
-    group_by(ptimeBin) %>%
-    mutate(cumfrac=cumsum(frac)) %>%
-    ungroup()
-
-p5 <- ggplot(sumry, aes(x=as.numeric(ptimeBin), ymin=cumfrac-frac, ymax=cumfrac,
-		  fill=Groups)) +
-    geom_ribbon() +
-    scale_fill_manual(values=unique(sumry$Colors)) +
-    xlab("Tumor Development") +
-    ylab("Fraction of Cells") +
-    theme(legend.position="bottom")
-p5
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=7,eval=FALSE}
-library(dplyr)
-# Ribbon plot
-pD <- data.frame(colData(sce))
-# pD <- left_join(pD,pcs.all[,c("Condition","ptime")])
-# colnames(pD)[colnames(pD)=="ptime"] <- "ptime"
-# pD <- pD[pD$MajorGroups %in% "Fibroblast",]
-pD <- droplevels(pD)
-sumry <- group_by(pD, ptimeBin, MajorGroups) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() # %>%
-#     mutate(cumfrac=cumsum(frac)) %>%
-#     ungroup()
-
-# ggplot(sumry, aes(x=ptime, y=frac)) +
-#     geom_point() +
-#     facet_wrap(~CellTypes)
-
-comb <- table(sumry$MajorGroups,sumry$ptimeBin) 
-missing.comb <- which(comb==0, arr.ind=TRUE)
-if (nrow(missing.comb)>0) {
-    add.missing <- data.frame("MajorGroups"=rownames(missing.comb),
-		      "ptimeBin"=colnames(comb)[missing.comb[,"col"]],
-		      "frac"=0,
-		      "n"=0)
-    sumry <- rbind(sumry,add.missing)
-}
-
-sumry$Colors <- plyr::mapvalues(as.character(sumry$MajorGroups),
-				as.character(unique(pD$MajorGroups)),
-				c("#084D96","#1B843F","#FDCFBB","#737373"))
-
-sumry <- arrange(sumry, ptimeBin, MajorGroups) %>%
-    group_by(ptimeBin) %>%
-    mutate(cumfrac=cumsum(frac)) %>%
-    ungroup()
-
-p6 <- ggplot(sumry, aes(x=as.numeric(ptimeBin), ymin=cumfrac-frac, ymax=cumfrac,
-		  fill=MajorGroups)) +
-    geom_ribbon() +
-    scale_fill_manual(values=unique(sumry$Colors)) +
-    xlab("Tumor Development") +
-    ylab("Fraction of Cells") +
-    theme(legend.position="bottom")
-p6
-```
-
-
-
