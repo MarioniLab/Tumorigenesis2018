@@ -8,6 +8,8 @@ import pandas as pd
 
 import wot
 
+import argparse
+
 # Read in Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--pca',  
