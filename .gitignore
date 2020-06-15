@@ -8,3 +8,4 @@
 *.html
 *.pdf
 *.sh
+/src/legacy_code
