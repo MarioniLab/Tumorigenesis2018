@@ -295,7 +295,7 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     #     scale_color_gradient2(low="blue",high="red",mid="orange") +
     scale_color_distiller(palette="Spectral") +
     scale_size(range=c(0,3)) +
-    theme(panel.grid.major=element_line(colour="grey50",size=0.2,linetype="dashed"),
+    theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
 	  axis.text=element_text(size=7),
 	  legend.position="bottom",
 	  legend.direction="horizontal") +
@@ -317,12 +317,12 @@ quickGSE <- function(gens, pvals, ont="BP", method=c("GO", "Broad")) {
     alG <- pvals
     names(alG) <- gens
 
-    # prepare Data for topGO
-    GO.data <- new("topGOdata", description="Lib GO",ontology=ont, allGenes=alG, 
-		   annot=annFUN.org, mapping="org.Mm.eg.db",geneSelectionFun=topDiffGenes,
-		   nodeSize=5, ID="symbol")
 
     if (grepl("GO",method)) {
+	# prepare Data for topGO
+	GO.data <- new("topGOdata", description="Lib GO",ontology=ont, allGenes=alG, 
+		       annot=annFUN.org, mapping="org.Mm.eg.db",geneSelectionFun=topDiffGenes,
+		       nodeSize=5, ID="symbol")
 	# Fisher
 	result.classic <- runTest(GO.data, statistic="fisher",algorithm="weight01")
 	# KS I am just leaving this here in case I want to do this again
@@ -338,14 +338,14 @@ quickGSE <- function(gens, pvals, ont="BP", method=c("GO", "Broad")) {
     if (method=="Broad") {
 	require(reshape2)
 	require(clusterProfiler)
-	load("../data/misc/mouse_H_v5p2.rdata")
-	load("../data/misc/mouse_c2_v5p2.rdata")
-	load(url("http://bioinf.wehi.edu.au/software/MSigDB/mouse_c7_v5p2.rdata"))
+	load("~/Cambridge/Tumorigenesis2018/data/misc/mouse_H_v5p2.rdata")
+#	load("~/Cambridge/Tumorigenesis2018/data/misc/mouse_c2_v5p2.rdata")
+#	load(url("http://bioinf.wehi.edu.au/software/MSigDB/mouse_c7_v5p2.rdata"))
 
-	geneset1 <- melt(Mm.H)
-	geneset2 <- melt(Mm.c2)
-	geneset3 <- melt(Mm.c7)
-	geneset <- rbind(geneset1,geneset2,geneset3)
+	geneset <- melt(Mm.H)
+#	geneset2 <- melt(Mm.c2)
+#	geneset3 <- melt(Mm.c7)
+#	geneset <- rbind(geneset1,geneset2)#,geneset3)
 
 	colnames(geneset) <- c("ENTREZID","Geneset")
 	ids <- unique(as.character(geneset$ENTREZID))
@@ -354,7 +354,7 @@ quickGSE <- function(gens, pvals, ont="BP", method=c("GO", "Broad")) {
 	geneset <- geneset[!duplicated(geneset),]
 	geneset <- geneset[,c(2:3)]
 	colnames(geneset) <- c("TERM","GENE")
-	out <- enricher(names(gens)[topDiffGenes(gens)],universe=names(gens),TERM2GENE=geneset,qvalueCutoff=0.01,minGSSize=10)
+	out <- enricher(names(alG)[topDiffGenes(alG)],universe=names(alG),TERM2GENE=geneset,qvalueCutoff=0.01,minGSSize=10)
 	out <- data.frame(out)
 	out$ID <- factor(out$ID, levels=rev(unique(out$ID)))
 	return(out)
