@@ -709,9 +709,10 @@ ggplot(sumry, aes(x=as.numeric(Ptime), ymin=cumfrac-frac, ymax=cumfrac,
 out <- pcs.all[,c("Condition","ptime")]
 out.nt <- out[!grepl("TM",out$Condition),]
 out.t <- out[grepl("TM",out$Condition),]
-out.nt$ptimeBin <- cut(out.nt$ptime,4,labels=c(1,2,3,4))
+out.nt$ptimeBin <- as.numeric(cut(out.nt$ptime,4,labels=c(1,2,3,4)))
 out.t$ptimeBin <- 5
 out <- rbind(out.nt,out.t)
+out$ptimeBin <- as.factor(out$ptimeBin)
 write.csv(out,"../../data/Integrated/Robjects/TumorTime.csv")
 sessionInfo()
 ```
