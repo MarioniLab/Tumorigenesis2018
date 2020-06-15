@@ -295,16 +295,25 @@ mark.sig <- lapply(mark.sub,function(x) data.frame(x)[x$FDR<0.01,])
 
 -7, 13,15 and 16 are Fb doublet
 - 12 is Fb but also some Krts etc.
-```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-features <- c("Csn2","Aldh1a3","Krt5","Col3a1","Cd74","Cited1","Krt8")
+```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
+features <- c("Csn2","Aldh1a3","Krt5","Col3a1","Cd74","Cited1","Krt8","Krt17")
 p0 <- plotExpression(sce.sub,x="SubCluster",features)
+p0
 ```
+
+- 1 and 11 are damaged cells, have either very low UMI or very low mitochondria count
+
+```{r, fig.width=10, fig.height=7, warning=FALSE, message=FALSE}
+plotColData(sce.sub,x="SubCluster",y="prcntMito")
+plotColData(sce.sub,x="SubCluster",y="DbltScore")
+```
+
 
 - I remove 1,8 and 9 and the rest is kept as possible sub Lp clusters, but might me merged below
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
 sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
-rmCells <- c(rmCells,sce.sub$barcode[sce.sub$SubCluster %in% c("4","12","10",
+rmCells <- c(rmCells,sce.sub$barcode[sce.sub$SubCluster %in% c("1","11","4","12","10",
 							       "7","13",
 							       "15","16")])
 ```
@@ -422,8 +431,8 @@ merged$NumberDE["Mp1",]
 - I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about TcCd81 and TcCd82, but will leave it like this for now)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce$CellTypesFinal <- as.character(merged$NewCluster)
-sce$CellTypesFinal[sce$CellTypesFinal=="Lp1.Lp5.Lp6.Lp3.Lp9.Lp8"] <- "Lp"
-sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp11.Lp14"] <- "Avd"
+sce$CellTypesFinal[sce$CellTypesFinal=="Lp5.Lp6.Lp8.Lp9"] <- "Lp"
+sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp3.Lp14"] <- "Avd"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp2"] <- "LpBsl"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp17.Pc"] <- "Pc"
 sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MyUk"
@@ -431,6 +440,8 @@ sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
 sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mono"
 sce$CellTypesFinal[sce$CellTypesFinal=="TcNaiveCd4.TcNaiveCd8.Tregs.TmemCd4"] <- sce$CellTypes[sce$CellTypes%in% c("TcNaiveCd4","TcNaiveCd8","Tregs","TmemCd4")]
 sce$CellTypesFinal[sce$CellTypesFinal=="Fb3.Fb8"] <- "Fb3"
+sce$MajorGroups[sce$CellTypesFinal=="Pc"] <- "Immune"
+sce$Groups[sce$CellTypesFinal=="Pc"] <- "Lymphoid"
 ```
 
 # Defining a color scheme
@@ -443,6 +454,7 @@ library(RColorBrewer)
 getPalette <- colorRampPalette(brewer.pal(9, "Blues"))
 col.epithelial <- getPalette(length(epithelial)+1)[2:(length(epithelial)+1)]
 names(col.epithelial) <- epithelial
+col.epithelial[names(col.epithelial)=="Tm"] <- "#800080"
 
 myeloid <- unique(sce$CellTypesFinal[sce$Groups=="Myeloid"])
 getPalette <- colorRampPalette(brewer.pal(9, "Oranges"))
@@ -470,6 +482,7 @@ groupColors <- c("Blue","Orange","Red","Green","Grey50")
 # names(groupColors) <- c("Epithelial","Myeloid","Lymphoid","Fibroblasts","Stroma")
 # sce$GroupColors <- mapvalues(sce$Groups, names(groupColors), groupColors)
 sce$Colors <- mapvalues(sce$CellTypesFinal, names(colors),colors)
+#sce$Colors[sce$CellTypesFinal=="Pc"] <- colors["Pc"]
 
 pD <- data.frame(colData(sce))
 ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypesFinal)) +
