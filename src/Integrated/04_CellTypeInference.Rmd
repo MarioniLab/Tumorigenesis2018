@@ -163,19 +163,19 @@ celltypes <- c(1:46)
 celltypes <- paste0("C",celltypes)
 
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
-names(celltypes) <- c("Tm","Fb1","Th17","Np","Bsl1",#5
+names(celltypes) <- c("Tm","Fb1","Ilc","Np","Bsl1",#5
 		      "Hs","Ec1","TcCycl","Avp","Ec2",#10
 
 		      "Bsl2","Ec3","Peryc1","Swc","TcCTL",#15
 		      "TcNk","Fb2","Fb3","Hsp","Peryc2",#20
 
-		      "Hs","Fb4","Mp2","Mp1Uk","Tam1",#25
+		      "Hs","Fb4","Trm2","Mp1Dm","Tam1",#25
 		      "Tam2","Bcs","Ec4","TcNaive","BslG",#30
 
-		      "Fb5Att","cDC2","Fb6","Mp2Sec","Pc",#35
+		      "Fb5Att","cDC2","Fb6","Trm2Sec","Pc",#35
 		      "DcCcr7","TmemCd8","DcsMbe","TmemCd4","Lp",#40
 
-		      "Mst","Fb7","Mp1","Fb8","Mcs",#45
+		      "Mst","Fb7","Trm1","Fb8","Mcs",#45
 		      "Fb9")
 
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
@@ -424,7 +424,7 @@ sce$CellTypes[sce$CellTypes %in% c("TcNaive3","TcNaive7")] <- "TcNaiveCd4"
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
-merged$NumberDE["Mp1",]
+merged$NumberDE["Trm1",]
 ```
 
 - This suggests merging some of the Lps in seperate groups
@@ -435,11 +435,12 @@ sce$CellTypesFinal[sce$CellTypesFinal=="Lp5.Lp6.Lp8.Lp9"] <- "Lp"
 sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp3.Lp14"] <- "Avd"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp2"] <- "LpBsl"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp17.Pc"] <- "Pc"
-sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MyUk"
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "Mcs2"
 sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
-sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mono"
+sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mcs1"
 sce$CellTypesFinal[sce$CellTypesFinal=="TcNaiveCd4.TcNaiveCd8.Tregs.TmemCd4"] <- sce$CellTypes[sce$CellTypes%in% c("TcNaiveCd4","TcNaiveCd8","Tregs","TmemCd4")]
 sce$CellTypesFinal[sce$CellTypesFinal=="Fb3.Fb8"] <- "Fb3"
+sce$CellTypesFinal[sce$CellTypesFinal=="Mp1Uk"] <- "Trm1" # These are merged as the only difference seems to be sequencing depth
 sce$MajorGroups[sce$CellTypesFinal=="Pc"] <- "Immune"
 sce$Groups[sce$CellTypesFinal=="Pc"] <- "Lymphoid"
 ```
