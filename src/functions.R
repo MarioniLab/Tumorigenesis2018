@@ -259,7 +259,7 @@ subCluster <- function(m, clusters, removeGenes=NULL, method="dynamic", ...) {
     out <- out[colnames(m)]
     return(as.factor(out))
 }
-bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, angled=TRUE) { 
+bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, angled=TRUE, zscores=FALSE) { 
     out <- data.frame(numeric(length(markers)))
     colnames(out) <- levels(factor(grps))[1]
     out.freq <- out
@@ -273,7 +273,11 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     out <- as.matrix(out)
     out.freq <- as.matrix(out.freq)
     rownames(out.freq) <- rownames(out) <- markers
-    out <- t(scale(t(out))) 
+    if(zscores) {
+	out <- t(scale(t(out))) 
+    } else {
+	out <- out/rowMax(out)
+    }
     out.long <- melt(out,value.name="Mean")
     out.freq <- melt(out.freq,value.name="Frequency")
     out.long$Frequency <- out.freq$Frequency * 100
@@ -292,8 +296,8 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     }
     p <- ggplot(out.long, aes(x=Var2, y=Var1, color=Mean, size=Frequency)) +
     geom_point() +
-    #     scale_color_gradient2(low="blue",high="red",mid="orange") +
-    scale_color_distiller(palette="Spectral") +
+    scale_color_gradient2(low="white",high="red") + ##,mid="orange") +
+   # scale_color_distiller(palette="Spectral") +
     scale_size(range=c(0,3)) +
     theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
 	  axis.text=element_text(size=7),
