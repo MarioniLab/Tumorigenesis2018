@@ -231,13 +231,13 @@ sce.full$CT[sce.full$CT %in% c("Lp","Avd")] <- "LpAv"
 sce.full$CT <- as.factor(sce.full$CT)
 
 fplot <- data.frame(colData(sce.full[,sce.full$CT %in% c("LpAv","Hs")]))
+
 fplot$Csn2 <- logcounts(sce.full[,sce.full$CT %in% c("LpAv","Hs")])["Csn2",]
-fplot$Rankl <- logcounts(sce.full[,sce.full$CT %in% c("LpAv","Hs")])["Tnfsf11",]
+fplot$Rankl <- logcounts(sce.full[,sce.full$CT %in% c("LpAv","Hs")])["Igf2",]
 fplot$Expression <- fplot$Csn2
 fplot$Expression[fplot$CT=="Hs"] <- fplot$Rankl[fplot$CT=="Hs"]
 fplot$CT <- droplevels(fplot$CT)
 levels(fplot$CT) <- c("Hs","Lp-Av")
-
 ggplot(fplot, aes(x=Sample,y=Expression))+
     geom_violin() +
     geom_jitter(size=.3) +
@@ -246,7 +246,7 @@ ggplot(fplot, aes(x=Sample,y=Expression))+
           strip.text.y = element_text(size=12, face="bold"),
           strip.background = element_rect(colour="black", fill="white"),
 	  axis.text.x = element_blank())
-ggsave(paste0(outdr,"Rankl-Csn2-Violin-Plot.pdf"),width=12,height=4)
+ggsave(paste0(outdr,"Igf2-Csn2-Violin-Plot.pdf"),width=12,height=4)
 ```
 
 ## Alveogenesis is not hormonally driven
@@ -430,11 +430,14 @@ top$Gene <- rownames(top)
 library(ggrepel)
 ggplot(top, aes(x=logFC, y=-log10(FDR))) +
     geom_point(size=.5,color="grey80") +
-    geom_point(data=top[top$FDR<0.05,], size=.9)+
-    geom_label_repel(data=top[1:20,], aes(label=Gene)) +
-    geom_hline(yintercept=2) +
-    ggtitle("Bin1 - WT")
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_label_repel(data=top[top$FDR<0.1,][1:30,], aes(label=Gene)) +
+    theme(text=element_text(size=12)) +
+    xlab("logFC") +
+    ylab("-log10(FDR)")
+ggsave(paste0(outdr,"Volcano_Bin1-WT_LPonly.pdf"))
 
+plotExpression(sce.full[,sce.full$CellTypesFinal=="Lp"],x="Condition","Cdkn2a")
 top$fFDR <- ifelse(top$FDR<0.1 & top$logFC>0,0.001,1)
 dirtyPlot(top) + ggtitle("Up in Bin1")
 top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
@@ -469,7 +472,7 @@ library(ggrepel)
 ggplot(top, aes(x=logFC, y=-log10(FDR))) +
     geom_point(size=.5,color="grey80") +
     geom_point(data=top[top$FDR<0.05,], size=.9)+
-    geom_label_repel(data=top[1:20,], aes(label=Gene)) +
+    geom_label_repel(data=top[1:40,], aes(label=Gene)) +
     geom_hline(yintercept=2) +
     ggtitle("DE w time")
 

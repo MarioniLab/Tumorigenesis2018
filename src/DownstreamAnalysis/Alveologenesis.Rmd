@@ -34,7 +34,7 @@ sce.full$CellTypes <- factor(sce.full$CellTypesFinal)
 sce.full$Colors <- factor(sce.full$Colors)
 sce.full$Batch <- as.character(sce.full$Batch)
 sce.full$Groups <- factor(sce.full$Groups)
-fkingp53_andtm <- c("WKBR76.5c","WKBR76.5f","WKBR61.4dTM","WKBR75.4bTM")
+fkingp53_andtm <- c("WKBR76.5c","WKBR76.5f")
 
 ptime <- read.csv("../../data/Integrated/Robjects/TumorTime.csv")[,-1]
 
@@ -49,7 +49,7 @@ sce.full$Condition[grepl("WKBR",sce.full$Condition)] <- sce.full$ptimeBin[grepl(
 sce.full$Condition[grepl("CTRL",sce.full$Condition)] <- "WTYoung"
 sce.full$Condition[grepl("CBLA1|CBLT",sce.full$Condition)] <- "WTOld"
 sce.full$Condition <- factor(sce.full$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
-							  "1","2","3","4"))
+							  "1","2","3","4","5"))
 
 sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
 rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
@@ -111,9 +111,17 @@ pD$Colors <- droplevels(pD$Colors)
 dpi <- 900
 pltUMAP <- function(pD.sub,pD) {
     p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-	geom_point_rast(color="grey80",size=.5,dpi=dpi) +
-	geom_point_rast(data=pD.sub, aes(color=CellTypes), size=.5,dpi=dpi) +
-	scale_color_manual(values=levels(pD.sub$Colors)) +
+	geom_point_rast(color="grey80",size=1,dpi=dpi) +
+	geom_point_rast(data=pD.sub, aes(fill=CellTypes), size=1,dpi=dpi,pch=21,stroke=.1) +
+	scale_fill_manual(values=levels(pD.sub$Colors)) +
+	theme_void() +
+	theme(legend.position="none")
+    return(p)
+}
+pltUMAPFull <- function(pD.sub,pD) {
+    p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+	geom_point_rast(data=pD.sub, aes(fill=CellTypes), size=1,dpi=dpi,pch=21,stroke=.1) +
+	scale_fill_manual(values=levels(pD.sub$Colors)) +
 	theme_void() +
 	theme(legend.position="none")
     return(p)
@@ -132,46 +140,123 @@ pD3 <- pD[pD$Condition==3,]
 #pD3 <- pD3[sample(nrow(pD3),2534),]
 
 pD4 <- pD[pD$Condition==4,]
+pD5 <- pD[pD$Condition==5,]
 #pD4 <- pD4[sample(nrow(pD4),2534),]
 pDNP <- pD[pD$Condition=="WTYoung",]
-pD4 <- pD[pD$Condition=="4.5dG",]
-pD9 <- pD[pD$Condition=="9.5dG",]
-pD14 <- pD[pD$Condition=="14.5dG",]
+pD4dG <- pD[pD$Condition=="4.5dG",]
+pD9dG <- pD[pD$Condition=="9.5dG",]
+pD14dG <- pD[pD$Condition=="14.5dG",]
 
+ggsave(paste0(outdr,"UMAP_All.png"),pltUMAPFull(pD,pD),dpi=dpi)
 ggsave(paste0(outdr,"UMAP_Bin_1.png"),pltUMAP(pD1,pD),dpi=dpi)
 ggsave(paste0(outdr,"UMAP_Bin_2.png"),pltUMAP(pD2,pD),dpi=dpi)
 ggsave(paste0(outdr,"UMAP_Bin_3.png"),pltUMAP(pD3,pD),dpi=dpi)
 ggsave(paste0(outdr,"UMAP_Bin_4.png"),pltUMAP(pD4,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_Bin_5.png"),pltUMAP(pD5,pD),dpi=dpi)
 ggsave(paste0(outdr,"UMAP_NP.png"),pltUMAP(pDNP,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_4dG.png"),pltUMAP(pD4,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_9dG.png"),pltUMAP(pD9,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_14dG.png"),pltUMAP(pD14,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_4dG.png"),pltUMAP(pD4dG,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_9dG.png"),pltUMAP(pD9dG,pD),dpi=dpi)
+ggsave(paste0(outdr,"UMAP_14dG.png"),pltUMAP(pD14dG,pD),dpi=dpi)
 
 
 
 # Some GEX
 pltGEXUMAP <- function(pD,gene) {
-    p <- ggplot(pD, aes(x=UMAP1, y=UMAP2, color=gene)) +
-	geom_point_rast(size=.5,dpi=dpi) +
+    mx <- quantile(pD$Expr,.99)
+    pD$Expr[pD$Expr>mx] <- mx
+    p <- ggplot(pD, aes(x=UMAP1, y=UMAP2, fill=gene)) +
+	geom_point_rast(size=1,dpi=dpi,pch=21,stroke=.1) +
 	theme_void() +
-	scale_color_viridis() +
+	scale_fill_viridis(option="C") +
 	theme(legend.position="none")
     return(p)
 }
-
-pD$Expr <- logcounts(sce)["Krt5",]
+pD$Expr <- logcounts(sce.full)["Krt5",]
 ggsave(paste0(outdr,"Krt5_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce)["Krt8",]
+pD$Expr <- logcounts(sce.full)["Krt8",]
 ggsave(paste0(outdr,"Krt8_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce)["Aldh1a3",]
+pD$Expr <- logcounts(sce.full)["Aldh1a3",]
 ggsave(paste0(outdr,"Aldh1a3_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce)["Csn2",]
+pD$Expr <- logcounts(sce.full)["Csn2",]
 ggsave(paste0(outdr,"Csn2_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce)["Cited1",]
+pD$Expr <- logcounts(sce.full)["Cited1",]
 ggsave(paste0(outdr,"Cited1_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce)["Mki67",]
-pltGEXUMAP(pD,pD$Expr)
-ggsave(paste0(outdr,"Csn2_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+
+# Some GEX with schex
+
+library(schex)
+sce.full <- make_hexbin(sce.full, nbins = 200, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+pltGEX <- function(sce.full, gene) {
+    plot_hexbin_gene(sce.full, gene=gene, type="logcounts",
+		     action="mean") +
+	theme_void() +
+	theme(legend.position="none") +
+	scale_fill_viridis(option="C") +
+	ggtitle("")
+}
+
+
+ggsave(paste0(outdr,"Csn2_UMAP_Bin.pdf"),pltGEX(sce.full,"Csn2"))
+ggsave(paste0(outdr,"Krt5_UMAP_Bin.pdf"),pltGEX(sce.full,"Krt5"))
+ggsave(paste0(outdr,"Krt8_UMAP_Bin.pdf"),pltGEX(sce.full,"Krt8"))
+ggsave(paste0(outdr,"Aldh1a3_UMAP_Bin.pdf"),pltGEX(sce.full,"Aldh1a3"))
+ggsave(paste0(outdr,"Cited1_UMAP_Bin.pdf"),pltGEX(sce.full,"Cited1"))
+
+ggsave(paste0(outdr,"Col4a1_UMAP_Bin.pdf"),pltGEX(sce.full,"Col4a1"))
+ggsave(paste0(outdr,"Acta2_UMAP_Bin.pdf"),pltGEX(sce.full,"Acta2"))
+
+library(schex)
+# Only Tumor
+sce.t <- sce.full[,sce.full$Condition %in% c(1,2,3,4,5)]
+sce.t <- make_hexbin(sce.t, nbins = 100, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+# Only Pregnancy
+sce.p <- sce.full[,sce.full$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG")]
+sce.p <- make_hexbin(sce.p, nbins = 100, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+# No WTOld to compare the two (doesn't make much of a diff)
+sce.sub <- sce.full[,!sce.full$Condition %in% "WTOld"]
+sce.sub <- make_hexbin(sce.sub, nbins = 100, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+
+library(RColorBrewer)
+cols.t <- brewer.pal(n=6,"PuRd")
+hx.t <- plot_hexbin_meta(sce.t, col="Condition", action="majority") +
+    scale_fill_manual(values=cols.t[2:6]) +
+    theme_void() +
+    theme(text=element_text(size=14)) +
+    theme(legend.position="left",
+	  legend.title=element_blank()) +
+    ggtitle("")
+
+ggsave(paste0(outdr,"UMAP_Tumor_Epithelium_Bins.pdf"),hx.t)
+
+cols.p <- brewer.pal(n=5,"GnBu")
+hx.p <- plot_hexbin_meta(sce.p, col="Condition", action="majority") +
+    scale_fill_manual(values=cols.p[2:5]) +
+    theme_void() +
+    theme(text=element_text(size=14)) +
+    theme(legend.position="left",
+	  legend.title=element_blank()) +
+    ggtitle("")
+
+ggsave(paste0(outdr,"UMAP_Pregnancy_Epithelium_Bins.pdf"),hx.p)
+plot_grid(hx.t,hx.p)
+
+hx.c <- plot_hexbin_meta(sce.sub, col="Experiment", action="prop") +
+    theme_void() +
+    ggtitle("") +
+    theme(text=element_text(size=14),
+	  legend.title=element_blank()) +
+    scale_fill_gradient2(low=cols.p[5],high=cols.t[5],mid="white",midpoint=0.5) 
+
+ggsave(paste0(outdr,"UMAP_TumorVsPregnancy_Epithelium_Bins.pdf"),hx.c)
+
 ```
 
 
@@ -185,7 +270,7 @@ markers <- findMarkers(sce,sce$CellTypes,
 		       direction="up",
 		       block=sce$Batch,
 		       subset.row=!rownames(sce) %in% rmgenes)
-genes <- lapply(markers,function(x) rownames(x)[1:5])
+genes <- lapply(markers,function(x) rownames(x)[1:10])
 genes <- do.call(c,genes)
 genes <- unique(genes)
 require(reshape2)
@@ -211,6 +296,7 @@ pltDC <- function(pD.sub,pD) {
 }
 # Compute Diffusion map on alveolar an lp cells
 sce.sub <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
+
 mnn.my <- reducedDim(sce.sub,"corrected")
 set.seed(42)
 library(destiny)
@@ -224,52 +310,56 @@ dcs <- eigenvectors(dm)
 sce.sub$DC1 <- pD.sub$DC1 <- dcs[,1]
 sce.sub$DC2 <- pD.sub$DC2 <- dcs[,2]
 
+ggplot(pD.sub, aes(x=DC1, y=DC2)) +
+	geom_point(aes(fill=Experiment), size=2,pch=21,stroke=.5) +
+	scale_fill_manual(values=c("pink","red")) +
+	theme_void() +
+	theme(legend.position="none")
 
 library(schex)
 reducedDim(sce.sub,"DM") <- dcs
 
-pD.sub$Expr <- logcounts(sce.sub)["Csn2",]
-pD1 <- pD.sub[pD.sub$Condition=="1",]
-pD2 <- pD.sub[pD.sub$Condition=="2",]
-pD3 <- pD.sub[pD.sub$Condition=="3",]
-pD4 <- pD.sub[pD.sub$Condition=="4",]
-pDNP <- pD.sub[pD.sub$Condition=="WTYoung",]
-pD45 <- pD.sub[pD.sub$Condition=="4.5dG",]
-pD95 <- pD.sub[pD.sub$Condition=="9.5dG",]
-pD145 <- pD.sub[pD.sub$Condition=="14.5dG",]
+# pD.sub$Expr <- logcounts(sce.sub)["Csn2",]
+# pD1 <- pD.sub[pD.sub$Condition=="1",]
+# pD2 <- pD.sub[pD.sub$Condition=="2",]
+# pD3 <- pD.sub[pD.sub$Condition=="3",]
+# pD4 <- pD.sub[pD.sub$Condition=="4",]
+# pDNP <- pD.sub[pD.sub$Condition=="WTYoung",]
+# pD45 <- pD.sub[pD.sub$Condition=="4.5dG",]
+# pD95 <- pD.sub[pD.sub$Condition=="9.5dG",]
+# pD145 <- pD.sub[pD.sub$Condition=="14.5dG",]
 
-ggsave(paste0(outdr,"DiffMap_Tumor_1.png"),pltDC(pD1,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Tumor_2.png"),pltDC(pD2,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Tumor_3.png"),pltDC(pD3,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Tumor_4.png"),pltDC(pD4,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Preg_NP.png"),pltDC(pDNP,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Preg_4dG.png"),pltDC(pD45,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Preg_9dG.png"),pltDC(pD95,pD.sub),dpi=dpi)
-ggsave(paste0(outdr,"DiffMap_Preg_14dG.png"),pltDC(pD145,pD.sub),dpi=dpi)
-
-sce.sub <- make_hexbin(sce.sub, nbins = 50, 
+# ggsave(paste0(outdr,"DiffMap_Tumor_1.png"),pltDC(pD1,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Tumor_2.png"),pltDC(pD2,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Tumor_3.png"),pltDC(pD3,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Tumor_4.png"),pltDC(pD4,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Preg_NP.png"),pltDC(pDNP,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Preg_4dG.png"),pltDC(pD45,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Preg_9dG.png"),pltDC(pD95,pD.sub),dpi=dpi)
+# ggsave(paste0(outdr,"DiffMap_Preg_14dG.png"),pltDC(pD145,pD.sub),dpi=dpi)
+# 
+sce.sub <- make_hexbin(sce.sub, nbins = 20, 
 		   dimension_reduction = "DM", use_dims=c(1,2))
-pki67 <- plot_hexbin_gene(sce.sub, gene="Mki67", type="logcounts",
-		 action="mean", xlab="DC1", ylab="DC2") +
-theme(text=element_text(size=14))
 
-pCsn2 <- plot_hexbin_gene(sce.sub, gene="Csn2", type="logcounts",
-		 action="mean", xlab="DC1", ylab="DC2") +
-theme(text=element_text(size=14))
+pExp <- plot_hexbin_meta(sce.sub,"Experiment",action="prop") +
+    scale_fill_gradient2(low="orange",mid="grey90",high="blue",midpoint=0.5) +
+    theme_void() +
+    theme(legend.position="none") +
+    ggtitle("")
 
-pAldh1a3 <- plot_hexbin_gene(sce.sub, gene="Aldh1a3", type="logcounts",
-		 action="mean", xlab="DC1", ylab="DC2") +
-theme(text=element_text(size=14))
+plotDCGEX <- function(sce.sub, gene){
+    plot_hexbin_gene(sce.sub, gene=gene, type="logcounts",
+		     action="mean") +
+	    theme_void() +
+	    theme(legend.position="none") +
+	    scale_fill_viridis(option="C") 
+}
 
-pWap <- plot_hexbin_gene(sce.sub, gene="Wap", type="logcounts",
-		 action="mean", xlab="DC1", ylab="DC2") +
-theme(text=element_text(size=14))
-
-
-ggsave(paste0(outdr,"DiffMap_Ki67.pdf"),pki67)
-ggsave(paste0(outdr,"DiffMap_Csn2.pdf"),pCsn2)
-ggsave(paste0(outdr,"DiffMap_Aldh1a3.pdf"),pAldh1a3)
-ggsave(paste0(outdr,"DiffMap_Wap.pdf"),pWap)
+ggsave(paste0(outdr,"DiffMap_TumorPregnancy.pdf"),pExp)
+ggsave(paste0(outdr,"DiffMap_Ki67.pdf"),plotDCGEX(sce.sub,"Mki67"))
+ggsave(paste0(outdr,"DiffMap_Csn2.pdf"),plotDCGEX(sce.sub,"Csn2"))
+ggsave(paste0(outdr,"DiffMap_Aldh1a3.pdf"),plotDCGEX(sce.sub,"Aldh1a3"))
+ggsave(paste0(outdr,"DiffMap_Wap.pdf"),plotDCGEX(sce.sub,"Wap"))
 ```
 
 ## Trajectory inference
