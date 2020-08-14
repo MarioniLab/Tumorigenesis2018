@@ -296,7 +296,7 @@ bubblePlot <- function(m, markers, grps, cluster_col=TRUE, cluster_row=TRUE, ang
     }
     p <- ggplot(out.long, aes(x=Var2, y=Var1, color=Mean, size=Frequency)) +
     geom_point() +
-    scale_color_gradient2(low="white",high="red") + ##,mid="orange") +
+    scale_color_gradient2(low="grey90",high="black") + ##,mid="orange") +
    # scale_color_distiller(palette="Spectral") +
     scale_size(range=c(0,3)) +
     theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
@@ -394,4 +394,32 @@ get_umap_graph <- function(umap_output) {
 
     igr <- graph_from_adjacency_matrix(m.adj, weighted=TRUE)
     return(igr)
+}
+
+theme_pub <- function(base_size=16) {
+  library(grid)
+  library(ggthemes)
+  (theme_foundation(base_size=base_size)
+  + theme(plot.title = element_text(face = "bold"),
+          text = element_text(size=18),
+          panel.background = element_rect(colour = NA),
+          plot.background = element_rect(colour = NA),
+          panel.border = element_rect(colour = NA),
+          axis.title = element_text(face = "bold",size = rel(1.2)),
+          axis.title.y = element_text(angle=90,vjust =2),
+          axis.title.x = element_text(vjust = -0.2),
+          axis.text = element_text(size=rel(1)), 
+          axis.line = element_line(colour="black",size=rel(1.5)),
+          axis.ticks = element_line(),
+          panel.grid.major = element_line(colour="#f0f0f0"),
+          panel.grid.minor = element_blank(),
+          legend.key = element_rect(colour = NA),
+          legend.position = "bottom",
+          legend.direction = "horizontal",
+          legend.key.width= unit(1.0, "cm"),
+          legend.key.height = unit(0.5, "cm"),
+          legend.title = element_text(face="italic"),
+          strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+          strip.text = element_text(face="bold")
+  ))
 }
