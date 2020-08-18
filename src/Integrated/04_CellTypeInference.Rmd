@@ -59,7 +59,7 @@ epiCluster <- paste0("C",epithelial)
 ## Immune
 - Most cells marked by Ptprc (Cd45)
 - Neutrophils marked by S100a8
-- Plasma cells Jchain
+- PlasmaCells Jchain
 - B-Cells Cd19 
 ```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
 immune <- c(15,16,27,29,3,37,39,8, # Lymphoid
@@ -163,19 +163,19 @@ celltypes <- c(1:46)
 celltypes <- paste0("C",celltypes)
 
 #pDC because of Siglec-Hhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC3977341/
-names(celltypes) <- c("Tm","Fb1","Ilc","Np","Bsl1",#5
-		      "Hs","Ec1","TcCycl","Avp","Ec2",#10
+names(celltypes) <- c("Tm","Fb1","ILCs","Neutrophils","Bsl1",#5
+		      "Hs","Ec1","CyclingT","Avp","Ec2",#10
 
-		      "Bsl2","Ec3","Peryc1","Swc","TcCTL",#15
-		      "TcNk","Fb2","Fb3","Hsp","Peryc2",#20
+		      "Bsl2","Ec3","Pericytes1","Swc","TcCTL",#15
+		      "NK1","Fb2","Fb3","Hsp","Pericytes2",#20
 
-		      "Hs","Fb4","Trm2","Mp1Dm","Tam1",#25
-		      "Tam2","Bcs","Ec4","TcNaive","BslG",#30
+		      "Hs","Fb4","Mo1","Mp1Dm","Tam1",#25
+		      "Tam2","BCells","Ec4","TcNaive","BslG",#30
 
-		      "Fb5Att","cDC2","Fb6","Trm2Sec","Pc",#35
-		      "DcCcr7","TmemCd8","DcsMbe","TmemCd4","Lp",#40
+		      "Fb5","cDC2","Fb6","Mo2","PlasmaCells",#35
+		      "migDC","CD81","DcsMbe","CD41","Lp",#40
 
-		      "Mst","Fb7","Trm1","Fb8","Mcs",#45
+		      "MastCells","Fb7","Mo3","Fb8","Mcs",#45
 		      "Fb9")
 
 sce$CellTypes <- mapvalues(sce$Cluster, from=celltypes, to=names(celltypes))
@@ -195,6 +195,45 @@ plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(s
 ```
 
 ## Further Resolution of some clusters
+
+### TcCTL
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="TcCTL")) +
+    geom_point()
+```
+
+- Sub Clustering with SNN and louvain
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$CellTypes=="TcCTL"]
+m.cor <- reducedDim(sce.sub,"corrected")
+
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+set.seed(42)
+igr <- buildSNNGraph(t(m.cor))
+subc <- igraph::cluster_louvain(igr)
+sce.sub$SubCluster <- factor(subc$membership)
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up",
+			subset.row=!rownames(sce.sub)%in% rmgenes)
+
+plotExpression(sce.sub, features=c("Klrb1c","Eomes","Klra8","Klra4","Gzma",
+			       "Cd4","Cd8a","Cd3d"),x="SubCluster") +
+    theme(axis.text.x=element_text(angle=45,hjust=1))
+plot_grid(plotUMAP(sce.sub,colour_by="Klrb1c",text_by="SubCluster"),
+plotUMAP(sce.sub,colour_by="Cd8a",text_by="SubCluster"),
+plotUMAP(sce.sub,colour_by="Cd3d",text_by="SubCluster"),
+plotUMAP(sce.sub,colour_by="Cd4",text_by="SubCluster")
+)
+# Based on the GEX and the fact that there is little DE between the sub clusters, I label them as follows
+sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
+sce$CellTypes[sce$CellTypes %in% c("TcCTL2","TcCTL4","TcCTL5")] <- "CD83"
+sce$CellTypes[sce$CellTypes %in% c("TcCTL3","TcCTL6")] <- "CTLs"
+sce$CellTypes[sce$CellTypes %in% c("TcCTL1")] <- "NK2"
+```
 ### Bsl1 contains small group of doublets
 - Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
 - The other subclusters are not kept as they don't have more than 10 DE genes
@@ -358,7 +397,7 @@ plotExpression(sce.sub,x="SubCluster","Siglech")
 stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
 sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
 sce$CellTypes[sce$CellTypes=="Mcs3"] <- "pDC"
-sce$CellTypes[sce$CellTypes=="Mcs6"] <- "Esn"
+sce$CellTypes[sce$CellTypes=="Mcs6"] <- "MdC3"
 ```
 
 - Clean Up, removing the doublets and damaged cells
@@ -415,34 +454,66 @@ plotExpression(sce.sub,x="SubCluster","Cd4")
 stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
 sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
 sce$CellTypes[sce$CellTypes=="TcNaive1"] <- "Tregs"
-sce$CellTypes[sce$CellTypes %in% c("TcNaive2","TcNaive4","TcNaive5","TcNaive6")] <- "TcNaiveCd8"
-sce$CellTypes[sce$CellTypes %in% c("TcNaive3","TcNaive7")] <- "TcNaiveCd4"
+sce$CellTypes[sce$CellTypes %in% c("TcNaive2","TcNaive4","TcNaive5","TcNaive6")] <- "CD82"
+sce$CellTypes[sce$CellTypes %in% c("TcNaive3","TcNaive7")] <- "CD42"
 ```
+
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$CellTypes=="Fb5"]
+m.cor <- reducedDim(sce.sub,"corrected")
+
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+set.seed(42)
+igr <- buildSNNGraph(t(m.cor))
+subc <- igraph::cluster_louvain(igr)
+sce.sub$SubCluster <- factor(subc$membership)
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up",
+			subset.row=!rownames(sce.sub)%in% rmgenes,
+			lfc=1)
+lapply(mark.sub, function(mrks) rownames(mrks)[mrks$FDR<0.01])
+```
+
+- Fb52 is a cluster of tumor associated fibroblasts
+- The rest I keep together as I wouldn't be able to interpret them
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+stopifnot(identical(sce.sub$barcode, sce$barcode[sce$barcode %in% sce.sub$barcode]))
+sce$CellTypes[sce$barcode %in% sce.sub$barcode] <- paste0(sce.sub$CellTypes,sce.sub$SubCluster)
+sce$CellTypes[sce$CellTypes=="Fb52"] <- "Cafs"
+sce$CellTypes[sce$CellTypes %in% c("Fb51","Fb53","Fb54","Fb55","Fb56","Fb57","Fb58","Fb59")] <- "Fb5"
+```
+
 
 # Merging
 - I finally run mergeCluster again to only maintain clusters with min 10 DE genes
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
-merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch)
-merged$NumberDE["Trm1",]
+merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch,
+		       maxRep = 30)
 ```
 
 - This suggests merging some of the Lps in seperate groups
-- I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about TcCd81 and TcCd82, but will leave it like this for now)
+- I am keeping the T-Cell clusters seperatley as I know that they correspond to different states of T-Cells (unsure about CD81 and CD82, but will leave it like this for now)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce$CellTypesFinal <- as.character(merged$NewCluster)
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp5.Lp6.Lp8.Lp9"] <- "Lp"
 sce$CellTypesFinal[sce$CellTypesFinal=="Avp.Lp3.Lp14"] <- "Avd"
 sce$CellTypesFinal[sce$CellTypesFinal=="Lp2"] <- "LpBsl"
-sce$CellTypesFinal[sce$CellTypesFinal=="Lp17.Pc"] <- "Pc"
-sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "Mcs2"
+sce$CellTypesFinal[sce$CellTypesFinal=="Lp17.PlasmaCells"] <- "PlasmaCells"
+sce$CellTypesFinal[sce$CellTypesFinal=="Mcs4"] <- "MdC2"
 sce$CellTypesFinal[sce$CellTypesFinal=="Mcs1.Mcs2"] <- "cDC1"
-sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "Mcs1"
-sce$CellTypesFinal[sce$CellTypesFinal=="TcNaiveCd4.TcNaiveCd8.Tregs.TmemCd4"] <- sce$CellTypes[sce$CellTypes%in% c("TcNaiveCd4","TcNaiveCd8","Tregs","TmemCd4")]
-sce$CellTypesFinal[sce$CellTypesFinal=="Fb3.Fb8"] <- "Fb3"
-sce$CellTypesFinal[sce$CellTypesFinal=="Mp1Uk"] <- "Trm1" # These are merged as the only difference seems to be sequencing depth
-sce$MajorGroups[sce$CellTypesFinal=="Pc"] <- "Immune"
-sce$Groups[sce$CellTypesFinal=="Pc"] <- "Lymphoid"
+sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "MdC1"
+sce$CellTypesFinal[sce$CellTypesFinal=="CD41.CD42.CD82.Tregs"] <- sce$CellTypes[sce$CellTypes%in% c("CD41","CD42","CD82","Tregs")]
+sce$CellTypesFinal[sce$CellTypesFinal=="CD83.CTLs.NK2"] <- sce$CellTypes[sce$CellTypes%in% c("CTLs","NK2","CD83")]
+sce$CellTypesFinal[sce$CellTypesFinal=="Mp1Dm"] <- "Mo3" # These are merged as the only difference seems to be sequencing depth
+# Rename with ø
+sce$MajorGroups[sce$CellTypesFinal=="PlasmaCells"] <- "Immune"
+sce$Groups[sce$CellTypesFinal=="PlasmaCells"] <- "Lymphoid"
 ```
 
 # Defining a color scheme
@@ -493,6 +564,6 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypesFinal)) +
 
 # Final Annotation and Save
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined_final.rds")
+saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined_final_2.rds")
 sessionInfo()
 ```
