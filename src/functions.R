@@ -423,3 +423,31 @@ theme_pub <- function(base_size=16) {
           strip.text = element_text(face="bold")
   ))
 }
+
+renameForPlot <- function(fctr) {
+    stopifnot(is.factor(fctr))
+    lvls <- levels(fctr)
+    strng <- as.character(fctr)
+    frm <- c("Mo1","Mo2","Mo3","BCells","PlasmaCells","CyclingT",
+	     "MastCells","CD41","CD42","CD43","CD81","CD82","CD83","Tm",
+	     "Fb1","Fb2","Fb3","Fb4","Fb5","Fb6","Fb7","Fb8","Fb9",
+	     "Bsl1","Bsl2","BslG",
+	     "Ec1","Ec2","Ec3","Ec4",
+	     "Pericytes1","Pericytes2",
+	     "Tam1", "Tam2",
+	     "MdC1","MdC2","MdC3")
+    too <- c("Mø 1","Mø 2","Mø 3","B cells","Plasma cells","Cycling T",
+	     "Mast cells","CD4 T cells 1","CD4 T cells 2","CD4 T cells 3",
+	     "CD8 T cells 1","CD8 T cells 2","CD8 T cells 3","Tumour",
+	     "Fb 1","Fb 2","Fb 3","Fb 4","Fb 5","Fb 6","Fb 7","Fb 8","Fb 9",
+	     "Bsl 1","Bsl 2","Bsl G",
+	     "Ec 1","Ec 2","Ec 3","Ec 4",
+	     "Pericytes 1","Pericytes 2",
+	     "Tam 1", "Tam 2",
+	     "MdC 1","MdC 2","MdC 3")
+    strng <- plyr::mapvalues(strng,frm,too)
+    lvls <- plyr::mapvalues(lvls,frm,too)
+    fctr <- factor(strng, levels=lvls)
+    return(fctr)
+}
+
