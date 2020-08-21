@@ -38,8 +38,8 @@ source("../functions.R")
 theme_set(theme_cowplot())
 
 # Load Data
-sce <- readRDS("../../data/Integrated/Robjects/SCE_combined_final.rds")
-sce <- sce[,sce$Experiment=="Tumorigenesis"]
+sce.full <- readRDS("../../data/Integrated/Robjects/SCE_combined_celltypes.rds")
+sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
 # Excluding WT and p53 wt
 sce <- sce[,!sce$Condition %in% c("CBLT","CBLA1","WKBR76.5f","WKBR76.5c")]
 sce$CellTypes <- sce$CellTypesFinal
@@ -163,68 +163,14 @@ plotPC <- function(pca) {
     return(pout)
 }
 
-#All Cells
+```
+# All Cells
+
+```{r, message=FALSE, warning=FALSE}
 pcs.all <- getPC(sce) 
 p.all <- plotPC(pcs.all) + ggtitle("Full Data")
-
-#Epithelial
-sce.epi <- sce[,sce$MajorGroups %in% "Epithelial"]
-pcs.epi <- getPC(sce.epi)
-p.epi <- plotPC(pcs.epi) + ggtitle("All Epithelial")
-
-#Luminal+Tm
-sce.lum <- sce[,sce$Groups %in% c("Luminal","TumorEpithel")]
-pcs.lum <- getPC(sce.lum)
-p.lum <- plotPC(pcs.lum) + ggtitle("All Luminal")
-
-#Immune
-sce.im <- sce[,sce$MajorGroups %in% "Immune"]
-pcs.im <- getPC(sce.im)
-p.im <- plotPC(pcs.im) + ggtitle("All Immune")# + theme(legend.position="none")
-
-#Myeloid
-sce.mye <- sce[,sce$Groups %in% "Myeloid"]
-pcs.mye <- getPC(sce.mye)
-p.mye <- plotPC(pcs.mye) + ggtitle("All Myeloid")
 ```
 
-### All 
-```{r, message=FALSE, warning=FALSE}
-p.all
-```
-
-### Epithelial 
-```{r, message=FALSE, warning=FALSE}
-p.epi
-```
-
-### Luminal 
-```{r, message=FALSE, warning=FALSE}
-p.lum
-```
-
-### Immune 
-```{r, message=FALSE, warning=FALSE}
-p.im
-```
-
-### Myeloid 
-```{r, message=FALSE, warning=FALSE}
-p.mye
-```
-
-### All vs Epithelial
-This is just to compare all versus epithelial
-```{r, message=FALSE, warning=FALSE}
-pcs.all <- pcs.all[rownames(pcs.epi),]
-pcs.all$PC1Epi <- pcs.epi$PC1
-ggplot(pcs.all, aes(x=PC1, y=PC1Epi, color=Age, label=Condition)) +
-    geom_text_repel(size=3) +
-    geom_point(size=2) +
-    xlab("PC1 All") +
-    ylab("PC1 Epithelial") +
-    theme_bw() 
-```
 
 ## Ordering based on PC1
 We can then create the same plot as before but this time with PC1 as being the X-Axis.
@@ -266,25 +212,26 @@ pcs.all$ptime <- (pcs.all$PC1-min(pcs.all$PC1))/max(pcs.all$PC1-min(pcs.all$PC1)
 sumry <- left_join(sumry,pcs.all[,c("Condition","ptime")])
 sumry$Condition <- factor(sumry$Condition,
 			  levels=sumry$Condition)
+
 pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
     geom_segment(aes(x=0, y=0, xend=110, yend=0,
-		     color=NULL),
-		 arrow=arrow(length=unit(0.5, "cm"))) +
-geom_dotplot(aes(fill=Condition, group=Condition), binwidth=1, 
-	     stackgroups=TRUE, binpositions="all", dotsize=2) +
-xlim(0,110) +
-ylim(0,.5) +
-xlab("Pseudotime") +
-scale_fill_manual(values=sumry$cols) +
-ggtitle("Inferred Order") +
-theme(axis.title.y=element_blank(),
-      axis.line.x=element_blank(),
-      axis.line.y=element_blank(),
-      axis.text.y=element_blank(),
-      legend.position="none",
-      axis.ticks.y=element_blank(),
-      axis.ticks.x=element_line(size=1, linetype="solid"),
-      axis.ticks.length.x=unit(.5,"cm"))
+			 color=NULL),
+		     arrow=arrow(length=unit(0.5, "cm"))) +
+    geom_dotplot(aes(fill=Condition, group=Condition), binwidth=1, 
+		 stackgroups=TRUE, binpositions="all", dotsize=2) +
+    xlim(0,110) +
+    ylim(0,.5) +
+    xlab("Pseudotime") +
+    scale_fill_manual(values=sumry$cols) +
+    ggtitle("Inferred Order") +
+    theme(axis.title.y=element_blank(),
+	  axis.line.x=element_blank(),
+	  axis.line.y=element_blank(),
+	  axis.text.y=element_blank(),
+	  legend.position="none",
+	  axis.ticks.y=element_blank(),
+	  axis.ticks.x=element_line(size=1, linetype="solid"),
+	  axis.ticks.length.x=unit(.5,"cm"))
 
 timeplt_byCond
 pseudotimeplt_byCond
@@ -302,48 +249,19 @@ There are certain things we can assume should be true if PC1 corresponds to tumo
 ## Correlation with Age
 Animals with higher age on average have a higher PC1 values.
 ```{r, message=FALSE, warning=FALSE}
-cr <- round(cor(as.numeric(pcs.all$Age), pcs.all$PC1),2)
+cr <- cor.test(as.numeric(pcs.all$Age), pcs.all$PC1)
 
+txt <- data.frame("PC1"=c(-40,-35),
+	   "Age"=c(48,47),
+	   "Lbls"=c(sprintf("rho == %0.2f",cr$estimate),
+		    sprintf("PVal == %0.2f", cr$p.value)))
 ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
-    geom_point() + 
-    xlab("PC1") +
-    ylab("Age [w]") 
+    geom_point(size=3,fill="grey50",color="black",pch=21) + 
+    geom_text(data=txt, aes(label=Lbls),parse=TRUE,size=6) +
+    xlab("-PC1") +
+    ylab("Age [w]") +
+    theme_pub()
     #     geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
-```
-
-## Similarity to wildtype
-
-Above I have excluded two wildtype samples when computing the PCA.
-I here compute the correlation to the mean of the two wildtype samples and plot it against the PC1 values.
-Correlation might not be the best measure for the similarity, might make sense to take something else.
-
-```{r, message=FALSE, warning=FALSE}
-sce.full <- readRDS("../../data/Integrated/Robjects/SCE_combined_final.rds")
-sce.full <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
-sce.sum <- aggregateAcrossCells(sce.full,#[,sce$MajorGroups=="Epithelial"],
-		      id=DataFrame(Condition=sce.full$Condition),
-		      use_exprs_values="counts",
-		      average=FALSE)
-
-sce.counts <- counts(sce.sum)
-y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
-keep <- filterByExpr(y.sce)
-y.sce <- y.sce[keep,]
-y.sce <- calcNormFactors(y.sce)
-logcpm <- cpm(y.sce, log=TRUE)
-rm(sce.full)
-pD.sum <- data.frame(colData(sce.sum))
-# 
-colnames(logcpm) <- pD.sum$Condition
-wt.logcpm <- rowMeans(logcpm[,c("CBLT","CBLA1")])
-wkbrs.logcpm <- logcpm[,grepl("WKBR",colnames(logcpm))]
-cors <- apply(wkbrs.logcpm,2, function(x) cor(wt.logcpm,x))
-add <- data.frame("Condition"=names(cors),
-		  "CorToWT"=cors)
-pcs.all <- left_join(pcs.all, add)
-
-ggplot(pcs.all, aes(x=PC1, y=CorToWT)) +
-    geom_point() 
 ```
 
 ## MPA-DMBA Data
@@ -431,7 +349,10 @@ fplot.dmba$Condition <- factor(fplot.dmba$Condition,
 ggplot(fplot.dmba, aes(x=PC1, y=PC2)) +
      geom_point(data=fplot.wkbr, color="grey80") +
      geom_point(aes(color=Condition),size=2) +
-     scale_color_manual(values=fplot.dmba$col)
+     scale_color_manual(values=fplot.dmba$col) +
+     theme_pub()
+
+
 
 plt <- ggplot(fplot.dmba, aes(x=ptime, y=0)) +
     geom_segment(aes(x=0, y=0, xend=110, yend=0,
@@ -455,6 +376,15 @@ plt <- ggplot(fplot.dmba, aes(x=ptime, y=0)) +
 	  axis.ticks.x=element_line(size=1, linetype="solid"),
 	  axis.ticks.length.x=unit(.5,"cm"))
 plt
+
+fplot.dmba$Timepoint <- as.character(fplot.dmba$Timepoint)
+fplot.dmba$Timepoint[fplot.dmba$Tumor] <- "Tumor"
+fplot.dmba$Timepoint <- factor(fplot.dmba$Timepoint,levels=c("T0","T1","T2",
+							     "T3","T4","T5",
+							     "T6","Tumor"))
+ggplot(fplot.dmba, aes(x=Timepoint, y=PC1)) +
+     geom_boxplot() +
+     theme_pub()
 ```
 
 ## PC1 Loadings
@@ -471,13 +401,15 @@ fp <- data.frame("Gene"=names(ld.pc1.ord),
 		 "Loading"=ld.pc1.ord)
 fp$Index <- c(1:nrow(fp))
 library(ggrepel)
+
 p.ld <- ggplot(fp, aes(x=Index, y=Loading)) +
     geom_point(color="grey80") +
     geom_point(data=fp[abs(fp$Loading)>0.02,],color="black") +
-    geom_text_repel(data=fp[c(1:10,(nrow(fp)-10):nrow(fp)),], aes(label=Gene)) +
+    geom_text_repel(data=fp[c(1:5,(nrow(fp)-5):nrow(fp)),], aes(label=Gene),size=5) +
     geom_hline(yintercept=0.02,color="red",lty="dashed") +
     geom_hline(yintercept=-0.02,color="red",lty="dashed") +
     ylab("PC1 Loading") +
+    theme_pub() +
     coord_flip()
 
 ps <- ld.pc1[ld.pc1 > 0.02]
@@ -515,6 +447,7 @@ for (i in seq_along(topLoads)) {
 				   fill=Fisher.classic
 				   )) +
 			    geom_col() +
+			    theme_pub() +
 			    expand_limits(x=0) +
 			    labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
 			    ylim(c(0,20)) +
@@ -528,180 +461,92 @@ p.ld
 
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
-out[[1]]
 out[[2]]
+out[[1]]
 ```
 
-## Variance of the data
-Shila suggested that possibly as the animals get closer to tumorigenesis the overall variance in the dataset increases.
-Possibly due to the emergence of new celltypes and/or more variability in existing celltypes
 ```{r, message=FALSE, warning=FALSE}
-outvr <- data.frame()
-for (ptm in pcs.all$ptime) {
-    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
-    cells <- colnames(sce)[sce$Condition==cond]
-    sce.sub <- sce[,cells]
-    var.dec <- modelGeneVar(sce.sub)
-    add <- data.frame("ptime"=ptm,
-		      "Var"=var.dec$bio)
-    outvr <- rbind(outvr,add)
-}
+# Repeat PC -.-
+pc.obj <- getPC(sce,getPCObject=TRUE) 
+# Selecting p53 wt
+sce.p53 <- sce.full[,sce.full$Condition %in% c("WKBR76.5f","WKBR76.5c")]
+sce.sum <- aggregateAcrossCells(sce.p53,
+		  id=DataFrame(Condition=sce.p53$Condition),
+		  use_exprs_values=c("counts"),
+		  average=FALSE)
+sce.counts <- counts(sce.sum)
+sce.counts <- sce.counts[rownames(pc.obj$rotation),]
+y.sce <- DGEList(counts=sce.counts, samples=data.frame(colData(sce.sum)))
+y.sce <- calcNormFactors(y.sce)
+logcpm <- cpm(y.sce, log=TRUE)
 
-smry <- group_by(outvr,ptime) %>%
-    summarize(ir=IQR(Var),
-	      mn=mean(Var),
-	      md=median(Var),
-	      pnt=quantile(Var,0.9),
-	      vr=var(Var))
+pcpredict <- predict(pc.obj,t(logcpm))
 
-ggplot(smry, aes(x=ptime, y=mn)) +
-    geom_point() +
-    xlab("Pseudo-tumortime") +
-    ylab("Mean of Residual logcount Variance")
-```
 
-## Strucutre of luminal compartment
 
-### SNN-Graphs
 
-I was hoping that you could possibly see the emergence the new cell state in the luminal compartment in the graph structure.
-If so, this could have been captured by some summary statistic of the graph and used as another confirmation.
-Note that below I exclude the two tumour samples, as I don't have a definition that I'd trust for "luminal" anymore.
-```{r, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
+pcs.all$PC1 <- pcs.all$PC1
+pcs.all$SampleID <- rownames(pcs.all)
+pcs.all$Tumor <- grepl("TM",pcs.all$SampleID)
+pcs.all$Tumor <- ifelse(pcs.all$Tumor,"Tumor","Mammary Gland")
+binbounds <- levels(cut(pcs.all$PC1[pcs.all$PC1<50],4))
+binbounds <- unlist(lapply(strsplit(binbounds,","),function(x) x[2]))
+binbounds <- as.numeric(gsub("]","",binbounds))
+binbounds <- c(min(pcs.all$PC1),binbounds)
 
-graphs <- list()
-smps <- pcs.all$ptime[pcs.all$ptime<90]
-for (ptm in smps) {
-    cond <- pcs.all$Condition[pcs.all$ptime==ptm]
-    cells <- colnames(sce)[sce$Condition==cond]
-    sce.sub <- sce[,cells]
-    sce.sub <- sce.sub[,sce.sub$Groups=="Luminal"]
-    var.dec <- modelGeneVar(sce.sub, subset.row=rowData(sce.sub)$KeepForHvg)
-    hvg <- getTopHVGs(var.dec)
-    graphs[[as.character(ptm)]] <- buildKNNGraph(sce.sub[hvg,])
-}
+add <- data.frame("SampleID"=sce.sum$SampleID,
+		  "Age"=paste0(sce.sum$Age,"w"),
+		  "PC1"=-pcpredict[,1],
+		  "PC2"=pcpredict[,2])
 
-library(igraph)
-library(ggnet)
-plist <- list()
-for (i in seq_along(graphs)) {
-	 nm <- names(graphs)[i]
-	 plist[[nm]] <- ggnet2(graphs[[i]],node.size=1) + ggtitle(nm)
-}
+pcs.all$Age <- as.numeric(pcs.all$Age)
 
-srt <- as.character(sort(as.numeric(names(graphs))))
-plist <- plist[srt]
-plot_grid(plotlist=plist)
-```
+bins <- data.frame("PC1"=c(mean(c(binbounds[1],binbounds[2])),
+			 mean(c(binbounds[2],binbounds[3])),
+			 mean(c(binbounds[3],binbounds[4])),
+			 mean(c(binbounds[4],binbounds[5])),
+			 75),
+		   "PC2"=c(60,60,60,60,60),
+		   "Age"=c(mean(pcs.all$Age[pcs.all$PC1 < binbounds[2]]),
+			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[2] & pcs.all$PC1 < binbounds[3]]),
+			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[3] & pcs.all$PC1 < binbounds[4]]),
+			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[4] & pcs.all$PC1 < binbounds[5]]),
+			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[5]]))
+		   )
 
-### UMAPs
-If you compute the UMAP on all Luminal and then split based on Condition, you can see the progressive emergence of the Av cells over "time".
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-sce.sub <- sce[,sce$Groups=="Luminal" & !grepl("TM",sce$Condition)]
-mnncor <- readRDS("../../data/Integrated/Robjects/Pregnancy_CorrectedPCA.rds")
-mnncor.sub <- mnncor[sce.sub$barcode,]
-library(umap)
-ump <- umap(mnncor.sub,random.state=42)
-pD.sub <- data.frame(colData(sce.sub))
-pD.sub$UMAP1 <- ump$layout[,1]
-pD.sub$UMAP2 <- ump$layout[,2]
+bins$Age <- round(bins$Age,1)
+bins$Age <- paste0(bins$Age,"w")
 
-pD.sub <- left_join(pD.sub, pcs.all[,c("Condition","ptime")])
-pD.sub$ptime <- round(pD.sub$ptime,3)
-pD.sub$ptime <- factor(pD.sub$ptime, levels=sort(unique(pD.sub$ptime)))
 
-ggplot(pD.sub, aes(x=UMAP1, y=UMAP2, color=CellTypes)) +
-    geom_point() +
-    facet_wrap(ptime~Batch) 
-    #     scale_fill_viridis() 
-    #     xlim(c(2.5,10)) +
-    #     ylim(c(-5,2.5))
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-library(schex)
-sce <- make_hexbin(sce, nbins = 100, 
-    dimension_reduction = "UMAP", use_dims=c(1,2))
-
-sce$Ptime <- plyr::mapvalues(sce$Condition,
-		       pcs.all$Condition,
-		       pcs.all$ptime)
-sce$Ptime <- as.numeric(as.character(sce$Ptime))
-plot_hexbin_meta(sce, col="Ptime", 
-    action="mean", xlab="UMAP1", ylab="UMAP2", 
-    title="Mean of Pseudotime") +
-    scale_fill_viridis(option="B")
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-sce.sub <- sce[,!grepl("TM",sce$Condition)]
-
-library(schex)
-sce.sub <- make_hexbin(sce.sub, nbins = 150, 
-    dimension_reduction = "UMAP", use_dims=c(1,2))
-
-sce.sub$Ptime <- plyr::mapvalues(sce.sub$Condition,
-		       pcs.all$Condition,
-		       pcs.all$ptime)
-sce.sub$Ptime <- as.numeric(as.character(sce.sub$Ptime))
-plot_hexbin_meta(sce.sub, col="Ptime", 
-    action="mean", xlab="UMAP1", ylab="UMAP2", 
-    title="Mean of Pseudotime (wo Tumors)") +
-    scale_fill_viridis(option="B")
-```
-
-```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
-library(dplyr)
-# Ribbon plot
-pD <- data.frame(colData(sce))
-# pD <- left_join(pD,pcs.all[,c("Condition","ptime")])
-# colnames(pD)[colnames(pD)=="ptime"] <- "Ptime"
-# pD <- pD[pD$MajorGroups %in% "Fibroblast",]
-pD <- droplevels(pD)
-sumry <- group_by(pD, Ptime, CellTypes) %>%
-    summarize(n=n()) %>%
-    mutate(frac=n/sum(n)) %>%
-    ungroup() # %>%
-#     mutate(cumfrac=cumsum(frac)) %>%
-#     ungroup()
-
-# ggplot(sumry, aes(x=Ptime, y=frac)) +
-#     geom_point() +
-#     facet_wrap(~CellTypes)
-
-comb <- table(sumry$CellTypes,sumry$Ptime) 
-missing.comb <- which(comb==0, arr.ind=TRUE)
-if (nrow(missing.comb)>0) {
-    add.missing <- data.frame("CellTypes"=rownames(missing.comb),
-		      "Ptime"=colnames(comb)[missing.comb[,"col"]],
-		      "frac"=0,
-		      "n"=0)
-    sumry <- rbind(sumry,add.missing)
-}
-
-sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypes),
-				as.character(unique(pD$CellTypes)),
-				as.character(unique(pD$Colors)))
-
-combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypes)))
-names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
-sumry$CellTypes <- plyr::mapvalues(as.character(sumry$CellTypes),
-				   as.character(names(combi)),
-				   as.character(combi))
-
-sumry <- arrange(sumry, Ptime, CellTypes) %>%
-    group_by(Ptime) %>%
-    mutate(cumfrac=cumsum(frac)) %>%
-    ungroup()
-
-ggplot(sumry, aes(x=as.numeric(Ptime), ymin=cumfrac-frac, ymax=cumfrac,
-		  fill=CellTypes)) +
-    geom_ribbon() +
-    scale_fill_manual(values=unique(sumry$Colors)) +
-    xlab("Tumor Development") +
-    ylab("Fraction of Cells") +
-    theme(legend.position="bottom")
-
+p1_col <- ggplot(pcs.all, aes(x=PC1, y=PC2, fill=Tumor)) +
+    geom_rect(aes(xmin=-Inf,
+		      xmax = binbounds[2],
+		      ymin = -Inf,
+		      ymax = Inf), fill = 'pink', alpha = 0.02) +
+    geom_rect(aes(xmin=binbounds[2],
+		      xmax = binbounds[3],
+		      ymin = -Inf,
+		      ymax = Inf), fill = 'pink', alpha = 0.06) +
+    geom_rect(aes(xmin=binbounds[3],
+		      xmax = binbounds[4],
+		      ymin = -Inf,
+		      ymax = Inf), fill = 'pink', alpha = 0.10) +
+    geom_rect(aes(xmin=binbounds[4],
+		      xmax = binbounds[5],
+		      ymin = -Inf,
+		      ymax = Inf), fill = 'pink', alpha = 0.20) +
+    geom_rect(aes(xmin=binbounds[5],
+		      xmax = Inf,
+		      ymin = -Inf,
+		      ymax = Inf), fill = 'red', alpha = 0.03) +
+    geom_vline(xintercept=binbounds, lty="dashed") +
+    geom_point(size=2,pch=21) + #This is just laziness 
+    geom_point(data=add, size=4, pch=21, fill="blue") +
+    geom_text(data=bins,aes(label=Age, fill=NULL),fontface="bold",size=6) +
+    geom_text_repel(data=add,aes(label=Age, fill=NULL),fontface="bold",size=6) +
+    theme_pub() +
+    theme(legend.position="none") 
+p1_col
 ```
 
 # Session Info and Save
