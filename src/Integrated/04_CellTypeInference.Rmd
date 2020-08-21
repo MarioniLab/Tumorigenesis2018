@@ -197,6 +197,9 @@ plotColData(sce, x="CellTypes",y="DbltScore") + theme(axis.text.x=element_text(s
 ## Further Resolution of some clusters
 
 ### TcCTL
+- This cluster contains a mix of NK cells and CD8 cells.
+- Subclustering resolves this cluster into a CD8 cluster, one NK cell cluster (that I will most likely merge with the other NK cells) and 
+  a cluster of cytotoxic lymphocytes, where the GEX profile is ambiguous and it is hard to label them definitely as CD8 T or NK
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="TcCTL")) +
     geom_point()
@@ -234,6 +237,8 @@ sce$CellTypes[sce$CellTypes %in% c("TcCTL2","TcCTL4","TcCTL5")] <- "CD83"
 sce$CellTypes[sce$CellTypes %in% c("TcCTL3","TcCTL6")] <- "CTLs"
 sce$CellTypes[sce$CellTypes %in% c("TcCTL1")] <- "NK2"
 ```
+
+
 ### Bsl1 contains small group of doublets
 - Contains some obvious structure, judging from the plot it looks like it clusters with some doublets
 - The other subclusters are not kept as they don't have more than 10 DE genes
@@ -382,7 +387,7 @@ mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
 			subset.row=!rownames(sce.sub)%in% rmgenes)
 ```
 
--6 are Esoniophils (Ear2)
+-6 express Ear2
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 plotExpression(sce.sub,x="SubCluster","Ear2")
 ```
@@ -406,6 +411,7 @@ sce <- sce[,!sce$barcode %in% rmCells]
 ```
 
 ### TcNaive
+- This cluster contains a mix of Tregs, CD4 cells and CD8 T Cells
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 ggplot(data.frame(colData(sce)), aes(x=UMAP1, y=UMAP2, color=CellTypes=="TcNaive")) +
     geom_point()
@@ -458,7 +464,8 @@ sce$CellTypes[sce$CellTypes %in% c("TcNaive2","TcNaive4","TcNaive5","TcNaive6")]
 sce$CellTypes[sce$CellTypes %in% c("TcNaive3","TcNaive7")] <- "CD42"
 ```
 
-
+# Fb 5
+- This cluster contains one obvious "outlier group" that represent fibroblasts from the tumour (CAFs)
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce.sub <- sce[,sce$CellTypes=="Fb5"]
 m.cor <- reducedDim(sce.sub,"corrected")
@@ -490,7 +497,8 @@ sce$CellTypes[sce$CellTypes %in% c("Fb51","Fb53","Fb54","Fb55","Fb56","Fb57","Fb
 
 
 # Merging
-- I finally run mergeCluster again to only maintain clusters with min 10 DE genes
+- I finally run mergeCluster again to only maintain clusters with min 10 DE genes unless the clusters represent meaningful subgroups
+  which is generally the case for some of the T Cell clusters
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 m <- logcounts(sce)
 merged <- mergeCluster(m, factor(sce$CellTypes), removeGenes=rmgenes, block=sce$Batch,
@@ -511,59 +519,35 @@ sce$CellTypesFinal[sce$CellTypesFinal=="DcsMbe.Mcs5"] <- "MdC1"
 sce$CellTypesFinal[sce$CellTypesFinal=="CD41.CD42.CD82.Tregs"] <- sce$CellTypes[sce$CellTypes%in% c("CD41","CD42","CD82","Tregs")]
 sce$CellTypesFinal[sce$CellTypesFinal=="CD83.CTLs.NK2"] <- sce$CellTypes[sce$CellTypes%in% c("CTLs","NK2","CD83")]
 sce$CellTypesFinal[sce$CellTypesFinal=="Mp1Dm"] <- "Mo3" # These are merged as the only difference seems to be sequencing depth
-# Rename with ø
 sce$MajorGroups[sce$CellTypesFinal=="PlasmaCells"] <- "Immune"
 sce$Groups[sce$CellTypesFinal=="PlasmaCells"] <- "Lymphoid"
+
 ```
 
-# Defining a color scheme
-```{r, fig.width=10, fig.height=7, warning=FALSE, message=FALSE}
-sce$CellTypesFinal <- factor(sce$CellTypesFinal)
-epithelial <- unique(sce$CellTypesFinal[sce$MajorGroups=="Epithelial"])
+## NK clusters
+- The two NK clusters only show 3 genes DE, I will merge them for simplicity
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce[,sce$CellTypes %in% c("NK1","NK2")]
+m.cor <- reducedDim(sce.sub,"corrected")
 
-library(RColorBrewer)
+ump.cor <- umap::umap(m.cor, random_state=42)
+reducedDim(sce.sub,type="UMAP") <- ump.cor$layout[,1:2]
+set.seed(42)
+sce.sub$SubCluster <- sce.sub$CellTypes
+plotUMAP(sce.sub,text_by="SubCluster",colour_by="SubCluster")
+mark.sub <- findMarkers(sce.sub, sce.sub$SubCluster,
+			block=sce.sub$Batch,
+			pval.type="all",
+			direction="up",
+			subset.row=!rownames(sce.sub)%in% rmgenes,
+			lfc=1)
+head(data.frame(mark.sub[[1]]),4)
 
-getPalette <- colorRampPalette(brewer.pal(9, "Blues"))
-col.epithelial <- getPalette(length(epithelial)+1)[2:(length(epithelial)+1)]
-names(col.epithelial) <- epithelial
-col.epithelial[names(col.epithelial)=="Tm"] <- "#800080"
-
-myeloid <- unique(sce$CellTypesFinal[sce$Groups=="Myeloid"])
-getPalette <- colorRampPalette(brewer.pal(9, "Oranges"))
-col.myeloid <- getPalette(length(myeloid)+1)[2:(length(myeloid)+1)]
-names(col.myeloid) <- myeloid
-
-lymphoid <- unique(sce$CellTypesFinal[sce$Groups=="Lymphoid"])
-getPalette <- colorRampPalette(brewer.pal(9, "Reds"))
-col.lymphoid <- getPalette(length(lymphoid)+1)[2:(length(lymphoid)+1)]
-names(col.lymphoid) <- lymphoid
-
-fibroblasts <- unique(sce$CellTypesFinal[sce$MajorGroups=="Fibroblast"])
-getPalette <- colorRampPalette(brewer.pal(9, "Greens"))
-col.fibroblasts <- getPalette(length(fibroblasts)+1)[2:(length(fibroblasts)+1)]
-names(col.fibroblasts) <- fibroblasts
-
-stroma <- unique(sce$CellTypesFinal[sce$MajorGroups=="Stroma"])
-col.stroma <- brewer.pal(n=length(stroma)+1,"Greys")[2:(length(stroma)+1)]
-names(col.stroma) <- stroma
-
-colors <- c(col.epithelial, col.myeloid, col.lymphoid, col.fibroblasts,
-	    col.stroma)
-
-groupColors <- c("Blue","Orange","Red","Green","Grey50")
-# names(groupColors) <- c("Epithelial","Myeloid","Lymphoid","Fibroblasts","Stroma")
-# sce$GroupColors <- mapvalues(sce$Groups, names(groupColors), groupColors)
-sce$Colors <- mapvalues(sce$CellTypesFinal, names(colors),colors)
-#sce$Colors[sce$CellTypesFinal=="Pc"] <- colors["Pc"]
-
-pD <- data.frame(colData(sce))
-ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypesFinal)) +
-    geom_point() +
-    scale_color_manual(values=levels(pD$Colors))
+sce$CellTypesFinal[sce$CellTypesFinal %in% c("NK1","NK2")] <- "NK"
 ```
 
 # Final Annotation and Save
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined_final_2.rds")
+saveRDS(sce,file="../../data/Integrated/Robjects/SCE_combined_celltypes.rds")
 sessionInfo()
 ```
