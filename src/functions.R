@@ -425,8 +425,6 @@ theme_pub <- function(base_size=16) {
 }
 
 renameForPlot <- function(fctr) {
-    stopifnot(is.factor(fctr))
-    lvls <- levels(fctr)
     strng <- as.character(fctr)
     frm <- c("Mo1","Mo2","Mo3","BCells","PlasmaCells","CyclingT",
 	     "MastCells","CD41","CD42","CD43","CD81","CD82","CD83","Tm",
@@ -435,7 +433,7 @@ renameForPlot <- function(fctr) {
 	     "Ec1","Ec2","Ec3","Ec4",
 	     "Pericytes1","Pericytes2",
 	     "Tam1", "Tam2",
-	     "MdC1","MdC2","MdC3")
+	     "MdC1","MdC2","MdC3","LpBsl")
     too <- c("Mø 1","Mø 2","Mø 3","B cells","Plasma cells","Cycling T",
 	     "Mast cells","CD4 T cells 1","CD4 T cells 2","CD4 T cells 3",
 	     "CD8 T cells 1","CD8 T cells 2","CD8 T cells 3","Tumour",
@@ -444,10 +442,13 @@ renameForPlot <- function(fctr) {
 	     "Ec 1","Ec 2","Ec 3","Ec 4",
 	     "Pericytes 1","Pericytes 2",
 	     "Tam 1", "Tam 2",
-	     "MdC 1","MdC 2","MdC 3")
-    strng <- plyr::mapvalues(strng,frm,too)
-    lvls <- plyr::mapvalues(lvls,frm,too)
-    fctr <- factor(strng, levels=lvls)
-    return(fctr)
+	     "MdC 1","MdC 2","MdC 3","Lp2")
+    out <- plyr::mapvalues(strng,frm,too)
+    if(is.factor(fctr)) {
+	lvls <- levels(fctr)
+	lvls <- plyr::mapvalues(lvls,frm,too)
+	out <- factor(out, levels=lvls)
+    } 
+    return(out)
 }
 

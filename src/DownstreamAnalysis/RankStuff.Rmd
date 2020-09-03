@@ -247,6 +247,116 @@ ggplot(fplot, aes(x=Sample,y=Expression))+
           strip.background = element_rect(colour="black", fill="white"),
 	  axis.text.x = element_blank())
 ggsave(paste0(outdr,"Igf2-Csn2-Violin-Plot.pdf"),width=12,height=4)
+
+### With multiple genes
+genesAv <- c("Csn2","Csn1s1","Csn1s2a","Wap","Glycam1")
+genesHs <- c("Igf2","Tnfsf11","Wnt4","Areg")
+genes <- c(genesAv[c(1,4)],genesHs[c(1,2)])
+out <-  data.frame()
+for (gen in genes) {
+    ct <- ifelse(gen %in% genesAv,"LpAv","Hs")
+    tmp <- data.frame(colData(sce.full[,sce.full$CT %in% ct]))
+    tmp$Expr <- logcounts(sce.full[,sce.full$CT %in% ct])[gen,]
+    tmp$GeneCT <- paste0(ct,"-",gen)
+    out <- rbind(out,tmp)
+}
+ggplot(out, aes(x=Sample,y=Expr))+
+    geom_violin() +
+    geom_jitter(size=.1) +
+    facet_grid(GeneCT~Condition,scales="free") +
+    theme(strip.text.x = element_text(size=12, face="bold") ,
+          strip.text.y = element_text(size=12, face="bold"),
+          strip.background = element_rect(colour="black", fill="white"),
+	  axis.text.x = element_blank())
+ggsave(paste0(outdr,"MultipleGenes-Violin-Plot.pdf"),width=8,height=6)
+```
+
+### The same as bubbleplot?
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
+genesAv <- c("Csn2","Csn1s1","Csn1s2a","Wap","Glycam1")
+genesHs <- c("Igf2","Tnfsf11")
+
+getMtx <- function(m,markers,grps) {
+    require(reshape2)
+    mtx <- data.frame(numeric(length(markers)))
+    colnames(mtx) <- levels(factor(grps))[1]
+    mtx.freq <- mtx
+    for (cond in levels(factor(grps))) {
+	expr <- rowMeans(m[markers,grps==cond])
+	expr.freq <- rowMeans(m[markers,grps==cond]>0)
+	colname <- cond
+	mtx[,colname] <- expr
+	mtx.freq[,colname] <- expr.freq
+    }
+    mtx <- as.matrix(mtx)
+    mtx.freq <- as.matrix(mtx.freq)
+    rownames(mtx.freq) <- rownames(mtx) <- markers
+    mtx <- mtx/rowMax(mtx)
+    mtx.long <- melt(mtx,value.name="Mean")
+    mtx.freq <- melt(mtx.freq,value.name="Frequency")
+    mtx.long$Frequency <- mtx.freq$Frequency * 100
+    return(mtx.long)
+}
+
+out.Av <- getMtx(assay(sce.full[,sce.full$CT=="LpAv"],"logcounts"), genesAv,
+       colData(sce.full[,sce.full$CT=="LpAv"])$SampleID)
+
+out.Hs <- getMtx(assay(sce.full[,sce.full$CT=="Hs"],"logcounts"), genesHs,
+       colData(sce.full[,sce.full$CT=="Hs"])$SampleID)
+
+out.long <- rbind(out.Av, out.Hs)
+colnames(out.long) <- c("Gene","SampleID","Mean","Frequency")
+
+add <- data.frame(colData(sce.full))[,c("SampleID","Condition")] %>%
+    group_by(SampleID,Condition) %>%
+    summarize() %>%
+    ungroup()
+
+add2 <- data.frame("Gene"=c(genesAv,genesHs),
+		   "CellType"=c(rep("LpAv",length(genesAv)),
+				rep("Hs",length(genesHs))))
+
+out.long <- dplyr::left_join(out.long,add)
+out.long <- dplyr::left_join(out.long,add2)
+
+ggplot(out.long[out.long$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),], aes(x=SampleID, y=Gene, color=Mean, size=Frequency)) +
+    geom_point() +
+    scale_color_gradient2(high="red",limits=c(0,1)) + ##,mid="orange") +
+   # scale_color_distiller(palette="Spectral") +
+    scale_size(range=c(0,3)) +
+    theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
+	  axis.text=element_text(size=14),
+	  legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text.x = element_text(size=12, face="bold") ,
+	  strip.text.y = element_text(size=12, face="bold"),
+	  strip.background = element_rect(colour="black", fill="white"),
+	  axis.text.x=element_blank(),
+	  axis.ticks.x=element_blank()) +
+    facet_grid(CellType~Condition,scales="free",space="free_y") +
+    xlab("") +
+    ylab("")
+ggsave(paste0(outdr,"MultipleGenes-Bubble-Plot_Pregnancy.pdf"),width=6.77,height=3.27)
+
+ggplot(out.long[out.long$Condition %in% c("WTOld","1","2","3","4"),], aes(x=SampleID, y=Gene, color=Mean, size=Frequency)) +
+    geom_point() +
+    scale_color_gradient2(high="red",limits=c(0,1)) + ##,mid="orange") +
+   # scale_color_distiller(palette="Spectral") +
+    scale_size(range=c(0,3)) +
+    theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
+	  axis.text=element_text(size=14),
+	  legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text.x = element_text(size=12, face="bold") ,
+	  strip.text.y = element_text(size=12, face="bold"),
+	  strip.background = element_rect(colour="black", fill="white"),
+	  axis.text.x=element_blank(),
+	  axis.ticks.x=element_blank()) +
+    facet_grid(CellType~Condition,scales="free",space="free_y") +
+    xlab("") +
+    ylab("")
+ggsave(paste0(outdr,"MultipleGenes-Bubble-Plot_Tumorigenesis.pdf"),width=6.77,height=3.27)
+
 ```
 
 ## Alveogenesis is not hormonally driven
@@ -335,73 +445,6 @@ p1 <- plot_hexbin_gene(sce, gene="Lifr", type="logcounts",
 ggtitle("Lifr in P")
 ```
 
-## CellphoneDB
-
-### Pregnancy
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-# Get count matrix with orthologs
-
-library("biomaRt")
-human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
- 
-mapping <- getLDS(attributes = c("ensembl_gene_id"), filters = "ensembl_gene_id", values = rD$ID , mart = mouse, attributesL = c("ensembl_gene_id"), martL = human, uniqueRows=T)
-colnames(mapping)[1] <- "ID"
-rD <- dplyr::left_join(data.frame(rD),mapping) 
-rD <- rD[!is.na(rD$Gene.stable.ID.1),]
-rD <- rD[rD$uniq %in% rownames(sce),]
-
-## Prepare for CellPhoneDB
-sce.out <- sce.p[rD$uniq,]
-rownames(sce.out) <- rD$Gene.stable.ID.1
-# SubSample For test
-# set.seed(42)
-# sce.out <- sce.out[,sample(ncol(sce.out),2000)]
-Conds <- unique(sce.out$Condition)
-for (Cond in Conds) {
-    meta <- data.frame(colData(sce.out[,sce.out$Condition==Cond]))
-    meta <- meta[,c("barcode","CellTypesFinal")]
-    colnames(meta) <- c("Cell","cell_type")
-    out <- logcounts(sce.out[,sce.out$Condition==Cond])
-    meta$Cell <- gsub("-",".",meta$Cell)
-    colnames(out) <- meta$Cell
-    write.table(out,paste0("cellphonedb_count_",Cond,".txt"), sep="\t", quote=FALSE)
-    write.table(meta,paste0("cellphonedb_meta_",Cond,".txt"), sep="\t", quote=FALSE, row.names=FALSE)
-}
-```
-
-### Tumor 
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-# Get count matrix with orthologs
-
-library("biomaRt")
-human <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
- 
-mapping <- getLDS(attributes = c("ensembl_gene_id"), filters = "ensembl_gene_id", values = rD$ID , mart = mouse, attributesL = c("ensembl_gene_id"), martL = human, uniqueRows=T)
-colnames(mapping)[1] <- "ID"
-rD <- dplyr::left_join(data.frame(rD),mapping) 
-rD <- rD[!is.na(rD$Gene.stable.ID.1),]
-rD <- rD[rD$uniq %in% rownames(sce),]
-
-## Prepare for CellPhoneDB
-sce.out <- sce[rD$uniq,]
-rownames(sce.out) <- rD$Gene.stable.ID.1
-# SubSample For test
-# set.seed(42)
-# sce.out <- sce.out[,sample(ncol(sce.out),2000)]
-bins <- c(1:4)
-for (bin in bins) {
-    meta <- data.frame(colData(sce.out[,sce.out$ptimeBin==bin]))
-    meta <- meta[,c("barcode","CellTypesFinal")]
-    colnames(meta) <- c("Cell","cell_type")
-    out <- logcounts(sce.out[,sce.out$ptimeBin==bin])
-    meta$Cell <- gsub("-",".",meta$Cell)
-    colnames(out) <- meta$Cell
-    write.table(out,paste0("cellphonedb_count_Bin",bin,".txt"), sep="\t", quote=FALSE)
-    write.table(meta,paste0("cellphonedb_meta_Bin",bin,".txt"), sep="\t", quote=FALSE, row.names=FALSE)
-}
-```
 
 ### DE Analysis of early LPs
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}

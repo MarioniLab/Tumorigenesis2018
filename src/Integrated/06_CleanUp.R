@@ -24,9 +24,7 @@ sce$Condition[grepl("CBLA1|CBLT",sce$Condition)] <- "WTOld"
 sce$Condition <- factor(sce$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
 							  "1","2","3","4","5"))
 
-sce$Groups <- factor(sce$Groups,levels=c("Basal","Luminal","TumorEpithel",
-				       "Lymphoid","Myeloid",
-				       "Fibroblast","Stroma"))
+sce$Groups <- factor(sce$Groups)
 sce$MajorGroups <- factor(sce$MajorGroups)
 
 # Batch is numeric, turn to character to prevent modelling as continuous

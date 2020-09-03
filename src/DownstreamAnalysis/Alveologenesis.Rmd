@@ -29,49 +29,165 @@ source("../functions.R")
 theme_set(theme_cowplot())
 
 sce.full <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
-sce.full$SubCellTypes <- factor(sce.full$CellTypes)
-sce.full$CellTypes <- factor(sce.full$CellTypesFinal)
-sce.full$Colors <- factor(sce.full$Colors)
-sce.full$Batch <- as.character(sce.full$Batch)
-sce.full$Groups <- factor(sce.full$Groups)
-fkingp53_andtm <- c("WKBR76.5c","WKBR76.5f")
 
-ptime <- read.csv("../../data/Integrated/Robjects/TumorTime.csv")[,-1]
-
-pD <- data.frame(colData(sce.full))
-pD <- dplyr::left_join(pD,ptime)
-pD <- droplevels(pD)
-colData(sce.full) <- DataFrame(pD)
-
-sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial" & !(sce.full$Condition %in% fkingp53_andtm)]
-
-sce.full$Condition[grepl("WKBR",sce.full$Condition)] <- sce.full$ptimeBin[grepl("WKBR",sce.full$Condition)]
-sce.full$Condition[grepl("CTRL",sce.full$Condition)] <- "WTYoung"
-sce.full$Condition[grepl("CBLA1|CBLT",sce.full$Condition)] <- "WTOld"
-sce.full$Condition <- factor(sce.full$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
-							  "1","2","3","4","5"))
+sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial"]
 
 sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
 rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
 rmgenes <- rownames(rD)[!rD$KeepForHvg]
 rmgenes <- rownames(sce)[rownames(sce) %in% rmgenes]
-outdr <- "../../data/figures/Figure2/"
+outdr <- "../../data/figures/Figure3/"
 ```
 
 # Overview
 
-```{r, fig.width=10, fig.height=4, warning=FALSE, message=FALSE}
+## Alveolar expression
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+#fplot <- data.frame(colData(sce[,sce$CellTypesFinal=="Avd"]))
+
+fplot <- data.frame()
+genes <- c("Epcam","Krt8","Krt18","Csn2","Csn1s1","Glycam1","Wap","Lalba")
+sce.av <- sce[,sce$CellTypesFinal=="Avd"]
+
+for (gene in genes) {
+    tmp <- data.frame("Expression"=logcounts(sce.av)[gene,],
+		      "Gene"=gene)
+    fplot <- rbind(fplot,tmp)
+}
+
+ggplot(fplot, aes(x=Gene,y=Expression)) +
+    geom_jitter(size=.3,color="grey80") +
+    stat_summary(fun = median, fun.min = median, fun.max = median,
+                 geom = "crossbar", width = 0.5) +
+    xlab("")
+
+# Version 2
+fplot <- data.frame()
+genes <- c("Epcam","Krt8","Krt5","Krt17",
+	   "Csn2","Csn1s1","Wap","Lalba",
+	   "Elf5","Esr1","Cebpb","Sox10")
+sce.av <- sce[,sce$CellTypesFinal=="Avd"]
+
+for (gene in genes) {
+    tmp <- data.frame("Expression"=logcounts(sce.av)[gene,],
+		      "Gene"=gene)
+    fplot <- rbind(fplot,tmp)
+}
+
+fplot$Category <- plyr::mapvalues(fplot$Gene,
+				  c(c("Epcam","Krt8","Krt5","Krt17"),
+				  c("Csn2","Csn1s1","Wap","Lalba"),
+	 			  c("Elf5","Esr1","Cebpb","Sox10")),
+				  c(rep("Epithelial",4),
+				  rep("Milk Proteins",4),
+				  rep("Luminal TFs",4)))
+
+ggplot(fplot, aes(x=Gene,y=Expression)) +
+    geom_jitter(size=.1,color="grey80") +
+#    geom_violin(draw_quantiles=c(.5),scale="width") +
+    stat_summary(fun = median, fun.min = median, fun.max = median,
+		 geom = "crossbar", width = 0.5) +
+    theme_pub() +
+    theme(strip.background = element_rect(colour="white", fill="white")) +
+    #           strip.text.x = element_text(size=12, face="bold") ,
+    #           strip.text.y = element_text(size=12, face="bold"),
+#               ,
+    #           axis.line=element_line(size=1.5),
+    #           axis.ticks=element_line(size=1.5)) +
+    theme(axis.text.x=element_text(angle=45,face="italic",hjust=1)) +
+    ylab("Expression") +
+    xlab("")
+
+ggsave(paste0(outdr,"Avd_Expression.pdf"))
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.av <- sce[,sce$CellTypesFinal %in% c("Lp","Avd")]
+sce.av <- sce.av[,!sce.av$Condition %in% c("5","WTOld")]
+sce.av <- sce.av[,sce.av$UMAP1 > -2.5] # removing a single cell that is sitting somewhere else
+pD <- droplevels(data.frame(colData(sce.av)))
+
+dpi <- 300
+
+pltUMAP <- function(pD.sub,pD) {
+    p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+	geom_point(color="grey80",size=2) +
+	geom_point(data=pD.sub, aes(fill=CellTypesFinal), size=2.1,pch=21,stroke=.1) +
+	geom_density2d(data=pD.sub, color="black",lwd=.5)  +
+	scale_fill_manual(values=levels(pD.sub$Colors)) +
+	theme_void() +
+	theme(legend.position="none")
+    return(p)
+}
+
+
+# One with everything
+
+p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(aes(fill=CellTypesFinal), size=2.1,pch=21,stroke=.1) +
+    scale_fill_manual(values=levels(pD$Colors)) +
+    theme_void() +
+    theme(legend.position="none")
+
+ggsave(paste0(outdr,"UMAP_LP_All.png"),p,dpi=dpi, width=3, height=3)
+
+
+ggsave(paste0(outdr,"UMAP_LP_Stage_1_Dens.png"),pltUMAP(pD[pD$Condition=="1",],pD),dpi=dpi, width=3, height=3)
+ggsave(paste0(outdr,"UMAP_LP_Stage_2_Dens.png"),pltUMAP(pD[pD$Condition=="2",],pD),dpi=dpi, width=3, height=3)
+ggsave(paste0(outdr,"UMAP_LP_Stage_3_Dens.png"),pltUMAP(pD[pD$Condition=="3",],pD),dpi=dpi, width=3, height=3)
+ggsave(paste0(outdr,"UMAP_LP_Stage_4_Dens.png"),pltUMAP(pD[pD$Condition=="4",],pD),dpi=dpi, width=3, height=3)
+
+pltGEXUMAP <- function(pD,gene) {
+    mx <- quantile(pD$Expr,.99)
+    pD$Expr[pD$Expr>mx] <- mx
+    p <- ggplot(pD, aes(x=UMAP1, y=UMAP2, fill=gene)) +
+	geom_point(size=2,pch=21,stroke=.1) +
+	theme_void() +
+	scale_fill_viridis(option="C") +
+	theme(legend.position="none")
+    return(p)
+}
+
+
+genes <- c("Csn2","Aldh1a3","Wap","Lalba","Cebpb","Elf5","Cebpb")
+for (gene in genes) {
+    pD$Expr <- logcounts(sce.av)[gene,]
+    ggsave(paste0(outdr,gene,"_LP_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi,width=3,heigh=3)
+}
+
+# Some GEX with schex
+library(schex)
+sce.av <- make_hexbin(sce.av, nbins = 50, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+pltGEX <- function(sce, gene) {
+    plot_hexbin_gene(sce, gene=gene, type="logcounts",
+		     action="mean") +
+	theme_void() +
+	theme(legend.position="none") +
+	scale_fill_viridis(option="C") +
+	ggtitle("")
+}
+
+for (gene in genes) {
+    pD$Expr <- logcounts(sce.av)[gene,]
+    ggsave(paste0(outdr,gene,"_LP_UMAP_Schex.png"),pltGEX(sce.av,gene),dpi=dpi,width=3,heigh=3)
+}
+
+```
+
+## UMAPS
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 pD <- data.frame(colData(sce))
 pD <- droplevels(pD[pD$Condition!="WTOld",])
-sumry <- group_by(pD, ptimeBin, CellTypes) %>%
+sumry <- group_by(pD, ptimeBin, CellTypesFinal) %>%
     summarize(n=n()) %>%
     mutate(frac=n/sum(n)) %>%
     ungroup()
 
-comb <- table(sumry$CellTypes,sumry$ptimeBin) 
+comb <- table(sumry$CellTypesFinal,sumry$ptimeBin) 
 missing.comb <- which(comb==0, arr.ind=TRUE)
 if (nrow(missing.comb)>0) {
-    add.missing <- data.frame("CellTypes"=rownames(missing.comb),
+    add.missing <- data.frame("CellTypesFinal"=rownames(missing.comb),
 		      "ptimeBin"=colnames(comb)[missing.comb[,"col"]],
 		      "frac"=0,
 		      "n"=0)
@@ -79,22 +195,22 @@ if (nrow(missing.comb)>0) {
 }
 sumry$ptimeBin <- as.numeric(sumry$ptimeBin)
 
-sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypes),
-				as.character(unique(pD$CellTypes)),
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+				as.character(unique(pD$CellTypesFinal)),
 				as.character(unique(pD$Colors)))
 
-# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypes)))
+# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypesFinal)))
 # names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
-# sumry$CellTypes <- plyr::mapvalues(as.character(sumry$CellTypes),
+# sumry$CellTypesFinal <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
 #                                    as.character(names(combi)),
 #                                    as.character(combi))
 
-sumry <- arrange(sumry, ptimeBin, CellTypes) %>%
+sumry <- arrange(sumry, ptimeBin, CellTypesFinal) %>%
     group_by(ptimeBin) %>%
     mutate(cumfrac=cumsum(frac)) %>%
     ungroup()
 
-barplt <- ggplot(sumry, aes(x=factor(ptimeBin,levels=c(5,4,3,2,1)), y=frac, fill=CellTypes)) +
+barplt <- ggplot(sumry, aes(x=factor(ptimeBin,levels=c(5,4,3,2,1)), y=frac, fill=CellTypesFinal)) +
     geom_bar(stat="identity",color="black") +
     scale_fill_manual(values=unique(sumry$Colors)) +
     xlab("Tumortime Bin") +
@@ -105,14 +221,14 @@ ggsave(paste0(outdr,"Barplot_CellTypes.pdf"),barplt)
 
 ```{r, fig.width=10, fig.height=4, warning=FALSE, message=FALSE}
 pD <- data.frame(colData(sce.full))
-pD$CellTypesFinal <- pD$CellTypes <- droplevels(pD$CellTypesFinal)
+pD$CellTypesFinal <- pD$CellTypesFinal <- droplevels(pD$CellTypesFinal)
 pD$Colors <- droplevels(pD$Colors)
 
 dpi <- 900
 pltUMAP <- function(pD.sub,pD) {
     p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
 	geom_point_rast(color="grey80",size=1,dpi=dpi) +
-	geom_point_rast(data=pD.sub, aes(fill=CellTypes), size=1,dpi=dpi,pch=21,stroke=.1) +
+	geom_point_rast(data=pD.sub, aes(fill=CellTypesFinal), size=1,dpi=dpi,pch=21,stroke=.1) +
 	scale_fill_manual(values=levels(pD.sub$Colors)) +
 	theme_void() +
 	theme(legend.position="none")
@@ -120,7 +236,7 @@ pltUMAP <- function(pD.sub,pD) {
 }
 pltUMAPFull <- function(pD.sub,pD) {
     p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
-	geom_point_rast(data=pD.sub, aes(fill=CellTypes), size=1,dpi=dpi,pch=21,stroke=.1) +
+	geom_point_rast(data=pD.sub, aes(fill=CellTypesFinal), size=1,dpi=dpi,pch=21,stroke=.1) +
 	scale_fill_manual(values=levels(pD.sub$Colors)) +
 	theme_void() +
 	theme(legend.position="none")
@@ -147,16 +263,16 @@ pD4dG <- pD[pD$Condition=="4.5dG",]
 pD9dG <- pD[pD$Condition=="9.5dG",]
 pD14dG <- pD[pD$Condition=="14.5dG",]
 
-ggsave(paste0(outdr,"UMAP_All.png"),pltUMAPFull(pD,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_Bin_1.png"),pltUMAP(pD1,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_Bin_2.png"),pltUMAP(pD2,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_Bin_3.png"),pltUMAP(pD3,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_Bin_4.png"),pltUMAP(pD4,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_Bin_5.png"),pltUMAP(pD5,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_NP.png"),pltUMAP(pDNP,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_4dG.png"),pltUMAP(pD4dG,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_9dG.png"),pltUMAP(pD9dG,pD),dpi=dpi)
-ggsave(paste0(outdr,"UMAP_14dG.png"),pltUMAP(pD14dG,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_All.png"),pltUMAPFull(pD,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_Bin_1.png"),pltUMAP(pD1,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_Bin_2.png"),pltUMAP(pD2,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_Bin_3.png"),pltUMAP(pD3,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_Bin_4.png"),pltUMAP(pD4,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_Bin_5.png"),pltUMAP(pD5,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_NP.png"),pltUMAP(pDNP,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_4dG.png"),pltUMAP(pD4dG,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_9dG.png"),pltUMAP(pD9dG,pD),dpi=dpi)
+# ggsave(paste0(outdr,"UMAP_14dG.png"),pltUMAP(pD14dG,pD),dpi=dpi)
 
 
 
@@ -171,25 +287,25 @@ pltGEXUMAP <- function(pD,gene) {
 	theme(legend.position="none")
     return(p)
 }
-pD$Expr <- logcounts(sce.full)["Krt5",]
-ggsave(paste0(outdr,"Krt5_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce.full)["Krt8",]
-ggsave(paste0(outdr,"Krt8_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce.full)["Aldh1a3",]
-ggsave(paste0(outdr,"Aldh1a3_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce.full)["Csn2",]
-ggsave(paste0(outdr,"Csn2_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
-pD$Expr <- logcounts(sce.full)["Cited1",]
-ggsave(paste0(outdr,"Cited1_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+# pD$Expr <- logcounts(sce.full)["Krt5",]
+# ggsave(paste0(outdr,"Krt5_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+# pD$Expr <- logcounts(sce.full)["Krt8",]
+# ggsave(paste0(outdr,"Krt8_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+# pD$Expr <- logcounts(sce.full)["Aldh1a3",]
+# ggsave(paste0(outdr,"Aldh1a3_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+# pD$Expr <- logcounts(sce.full)["Csn2",]
+# ggsave(paste0(outdr,"Csn2_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
+# pD$Expr <- logcounts(sce.full)["Cited1",]
+# ggsave(paste0(outdr,"Cited1_UMAP.png"),pltGEXUMAP(pD,pD$Expr),dpi=dpi)
 
 # Some GEX with schex
 
 library(schex)
-sce.full <- make_hexbin(sce.full, nbins = 200, 
+sce.preg <- make_hexbin(sce.full[,sce.full$Experiment=="Pregnancy"], nbins = 50, 
 		   dimension_reduction = "UMAP", use_dims=c(1,2))
 
-pltGEX <- function(sce.full, gene) {
-    plot_hexbin_gene(sce.full, gene=gene, type="logcounts",
+pltGEX <- function(sce, gene) {
+    plot_hexbin_gene(sce, gene=gene, type="logcounts",
 		     action="mean") +
 	theme_void() +
 	theme(legend.position="none") +
@@ -198,28 +314,59 @@ pltGEX <- function(sce.full, gene) {
 }
 
 
-ggsave(paste0(outdr,"Csn2_UMAP_Bin.pdf"),pltGEX(sce.full,"Csn2"))
-ggsave(paste0(outdr,"Krt5_UMAP_Bin.pdf"),pltGEX(sce.full,"Krt5"))
-ggsave(paste0(outdr,"Krt8_UMAP_Bin.pdf"),pltGEX(sce.full,"Krt8"))
-ggsave(paste0(outdr,"Aldh1a3_UMAP_Bin.pdf"),pltGEX(sce.full,"Aldh1a3"))
-ggsave(paste0(outdr,"Cited1_UMAP_Bin.pdf"),pltGEX(sce.full,"Cited1"))
+ggsave(paste0(outdr,"Csn2_UMAP_Bin.png"),pltGEX(sce.preg,"Csn2"))
+ggsave(paste0(outdr,"Krt5_UMAP_Bin.png"),pltGEX(sce.preg,"Krt5"))
+ggsave(paste0(outdr,"Krt8_UMAP_Bin.png"),pltGEX(sce.preg,"Krt8"))
+ggsave(paste0(outdr,"Aldh1a3_UMAP_Bin.png"),pltGEX(sce.preg,"Aldh1a3"))
+ggsave(paste0(outdr,"Cited1_UMAP_Bin.png"),pltGEX(sce.preg,"Cited1"))
+ggsave(paste0(outdr,"Rankl_UMAP_Bin.png"),pltGEX(sce.preg,"Tnfsf11"))
+ggsave(paste0(outdr,"Calca_UMAP_Bin.png"),pltGEX(sce.preg,"Calca"))
+ggsave(paste0(outdr,"Ki67_UMAP_Bin.png"),pltGEX(sce.preg,"Mki67"))
 
-ggsave(paste0(outdr,"Col4a1_UMAP_Bin.pdf"),pltGEX(sce.full,"Col4a1"))
-ggsave(paste0(outdr,"Acta2_UMAP_Bin.pdf"),pltGEX(sce.full,"Acta2"))
+ggsave(paste0(outdr,"Adamts18_UMAP_Bin.png"),pltGEX(sce.preg,"Adamts18"))
+ggsave(paste0(outdr,"Col4a1_UMAP_Bin.png"),pltGEX(sce.preg,"Col4a1"))
+ggsave(paste0(outdr,"Acta2_UMAP_Bin.png"),pltGEX(sce.preg,"Acta2"))
+
+p <- plotExpression(sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")],x="Experiment","Mki67") 
+
+p +
+    xlab("") +
+    ylab("Ki67") +
+    theme(text=element_text(size=16,face="bold"),
+	  axis.text=element_text(size=14,face="bold"))
 
 library(schex)
 # Only Tumor
 sce.t <- sce.full[,sce.full$Condition %in% c(1,2,3,4,5)]
+colnames(sce.t) <- sce.t$barcode
+dwnsmp <- data.frame(colData(sce.t)) %>%
+    group_by(Condition) %>%
+    sample_n(2534) %>%
+    .$barcode
+sce.t <- sce.t[,dwnsmp]
 sce.t <- make_hexbin(sce.t, nbins = 100, 
 		   dimension_reduction = "UMAP", use_dims=c(1,2))
 
 # Only Pregnancy
 sce.p <- sce.full[,sce.full$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG")]
+colnames(sce.p) <- sce.p$barcode
+dwnsmp <- data.frame(colData(sce.p)) %>%
+    group_by(Condition) %>%
+    sample_n(6597) %>%
+    .$barcode
+sce.p <- sce.p[,dwnsmp]
 sce.p <- make_hexbin(sce.p, nbins = 100, 
 		   dimension_reduction = "UMAP", use_dims=c(1,2))
 
 # No WTOld to compare the two (doesn't make much of a diff)
 sce.sub <- sce.full[,!sce.full$Condition %in% "WTOld"]
+colnames(sce.sub) <- sce.sub$barcode
+dwnsmp <- data.frame(colData(sce.sub)) %>%
+    group_by(Experiment) %>%
+    sample_n(26979) %>%
+    .$barcode
+
+sce.sub <- sce.sub[,dwnsmp]
 sce.sub <- make_hexbin(sce.sub, nbins = 100, 
 		   dimension_reduction = "UMAP", use_dims=c(1,2))
 
@@ -234,7 +381,7 @@ hx.t <- plot_hexbin_meta(sce.t, col="Condition", action="majority") +
 	  legend.title=element_blank()) +
     ggtitle("")
 
-ggsave(paste0(outdr,"UMAP_Tumor_Epithelium_Bins.pdf"),hx.t)
+ggsave(paste0(outdr,"UMAP_Tumor_Epithelium_Bins_SS.pdf"),hx.t)
 
 cols.p <- brewer.pal(n=5,"GnBu")
 hx.p <- plot_hexbin_meta(sce.p, col="Condition", action="majority") +
@@ -245,7 +392,7 @@ hx.p <- plot_hexbin_meta(sce.p, col="Condition", action="majority") +
 	  legend.title=element_blank()) +
     ggtitle("")
 
-ggsave(paste0(outdr,"UMAP_Pregnancy_Epithelium_Bins.pdf"),hx.p)
+ggsave(paste0(outdr,"UMAP_Pregnancy_Epithelium_Bins_SS.pdf"),hx.p)
 plot_grid(hx.t,hx.p)
 
 hx.c <- plot_hexbin_meta(sce.sub, col="Experiment", action="prop") +
@@ -253,10 +400,9 @@ hx.c <- plot_hexbin_meta(sce.sub, col="Experiment", action="prop") +
     ggtitle("") +
     theme(text=element_text(size=14),
 	  legend.title=element_blank()) +
-    scale_fill_gradient2(low=cols.p[5],high=cols.t[5],mid="white",midpoint=0.5) 
+    scale_fill_gradient2(low=cols.t[5],high=cols.p[5],mid="white",midpoint=0.5) 
 
-ggsave(paste0(outdr,"UMAP_TumorVsPregnancy_Epithelium_Bins.pdf"),hx.c)
-
+ggsave(paste0(outdr,"UMAP_TumorVsPregnancy_Epithelium_Bins_SS.pdf"),hx.c)
 ```
 
 
@@ -265,624 +411,43 @@ ggsave(paste0(outdr,"UMAP_TumorVsPregnancy_Epithelium_Bins.pdf"),hx.c)
 
 ## Markers for the various populations
 ```{r, fig.width=11, fig.height=3, warning=FALSE, message=FALSE}
-markers <- findMarkers(sce,sce$CellTypes,
+# Plotting UMAP 
+pD <- droplevels(data.frame(colData(sce.full)))
+
+p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point_rast(aes(fill=CellTypesFinal), size=1.8,dpi=900,pch=21,stroke=.2) +
+    scale_fill_manual(values=levels(pD$Colors)) +
+    theme_void() +
+    theme(legend.position="none")
+ggsave(paste0(outdr,"UMAP_Epithelium.png"),p)
+
+
+markers <- findMarkers(sce.full,factor(sce.full$CellTypesFinal),
 		       pval.type="all",
 		       direction="up",
-		       block=sce$Batch,
-		       subset.row=!rownames(sce) %in% rmgenes)
+		       block=sce.full$Batch,
+		       subset.row=!rownames(sce.full) %in% rmgenes)
 genes <- lapply(markers,function(x) rownames(x)[1:10])
 genes <- do.call(c,genes)
 genes <- unique(genes)
 require(reshape2)
-bubblePlot(logcounts(sce), genes, factor(sce$CellTypes) ,angled=TRUE) %+% coord_flip()
+bubblePlot(logcounts(sce.full), genes, factor(sce.full$CellTypesFinal) ,angled=TRUE) %+% coord_flip() +
+    scale_color_gradient2(low="white",high="red")
 ggsave(paste0(outdr,"GEX_Heatmap_horizontal.pdf"),width=7,height=3)
-p <- bubblePlot(logcounts(sce), genes, factor(sce$CellTypes) ,angled=TRUE)
+p <- bubblePlot(logcounts(sce.full), genes, factor(sce.full$CellTypesFinal) ,angled=TRUE)
 ggsave(paste0(outdr,"GEX_Heatmap_vertical.pdf"),p,width=3,height=7)
-```
 
-# Diffusion Map
-I first try using destiny to compute a diffusion map and infer pseudotime.
-I do like the DM as visualization but the package is horrendos that doing anything with the pseuodtime becomes a pain in the back.
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
-
-pltDC <- function(pD.sub,pD) {
-    p <- ggplot(pD, aes(x=DC1, y=DC2)) +
-	geom_point_rast(color="grey80",size=1,dpi=dpi) +
-	geom_point_rast(data=pD.sub, aes(color=Expr), size=1,dpi=dpi) +
-	scale_color_viridis() +
-	theme_void() +
-	theme(legend.position="none")
-    return(p)
-}
-# Compute Diffusion map on alveolar an lp cells
-sce.sub <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
-
-mnn.my <- reducedDim(sce.sub,"corrected")
-set.seed(42)
-library(destiny)
-dm <- DiffusionMap(mnn.my)
-pD.sub <- data.frame(colData(sce.sub))
-dcs <- eigenvectors(dm)
-# igr <- buildSNNGraph(mnn.my,d=NA, transposed=TRUE, k=40)
-# cls <- igraph::cluster_louvain(igr)$membership
-
-# Save in colData
-sce.sub$DC1 <- pD.sub$DC1 <- dcs[,1]
-sce.sub$DC2 <- pD.sub$DC2 <- dcs[,2]
-
-ggplot(pD.sub, aes(x=DC1, y=DC2)) +
-	geom_point(aes(fill=Experiment), size=2,pch=21,stroke=.5) +
-	scale_fill_manual(values=c("pink","red")) +
-	theme_void() +
-	theme(legend.position="none")
-
-library(schex)
-reducedDim(sce.sub,"DM") <- dcs
-
-# pD.sub$Expr <- logcounts(sce.sub)["Csn2",]
-# pD1 <- pD.sub[pD.sub$Condition=="1",]
-# pD2 <- pD.sub[pD.sub$Condition=="2",]
-# pD3 <- pD.sub[pD.sub$Condition=="3",]
-# pD4 <- pD.sub[pD.sub$Condition=="4",]
-# pDNP <- pD.sub[pD.sub$Condition=="WTYoung",]
-# pD45 <- pD.sub[pD.sub$Condition=="4.5dG",]
-# pD95 <- pD.sub[pD.sub$Condition=="9.5dG",]
-# pD145 <- pD.sub[pD.sub$Condition=="14.5dG",]
-
-# ggsave(paste0(outdr,"DiffMap_Tumor_1.png"),pltDC(pD1,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Tumor_2.png"),pltDC(pD2,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Tumor_3.png"),pltDC(pD3,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Tumor_4.png"),pltDC(pD4,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Preg_NP.png"),pltDC(pDNP,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Preg_4dG.png"),pltDC(pD45,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Preg_9dG.png"),pltDC(pD95,pD.sub),dpi=dpi)
-# ggsave(paste0(outdr,"DiffMap_Preg_14dG.png"),pltDC(pD145,pD.sub),dpi=dpi)
-# 
-sce.sub <- make_hexbin(sce.sub, nbins = 20, 
-		   dimension_reduction = "DM", use_dims=c(1,2))
-
-pExp <- plot_hexbin_meta(sce.sub,"Experiment",action="prop") +
-    scale_fill_gradient2(low="orange",mid="grey90",high="blue",midpoint=0.5) +
-    theme_void() +
-    theme(legend.position="none") +
-    ggtitle("")
-
-plotDCGEX <- function(sce.sub, gene){
-    plot_hexbin_gene(sce.sub, gene=gene, type="logcounts",
-		     action="mean") +
-	    theme_void() +
-	    theme(legend.position="none") +
-	    scale_fill_viridis(option="C") 
-}
-
-ggsave(paste0(outdr,"DiffMap_TumorPregnancy.pdf"),pExp)
-ggsave(paste0(outdr,"DiffMap_Ki67.pdf"),plotDCGEX(sce.sub,"Mki67"))
-ggsave(paste0(outdr,"DiffMap_Csn2.pdf"),plotDCGEX(sce.sub,"Csn2"))
-ggsave(paste0(outdr,"DiffMap_Aldh1a3.pdf"),plotDCGEX(sce.sub,"Aldh1a3"))
-ggsave(paste0(outdr,"DiffMap_Wap.pdf"),plotDCGEX(sce.sub,"Wap"))
-```
-
-## Trajectory inference
-I will try fitting a principle curve to the DM using slingshot.
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
-sce.sling <- slingshot(sce.sub, 
-		       clusterLabels=sce.sub$CellTypesFinal,
-		       approx_points=200,
-		       start.clus="Lp",
-		       extend='n',
-		       reducedDim="DM")
-# Setting up the colors.
-library(RColorBrewer)
-colors <- colorRampPalette(brewer.pal(11,'Spectral')[-6])(100)
-plotcol <- colors[cut(sce.sling$slingPseudotime_1, breaks=100)]
-#Creating a PCA plot.
-plot(reducedDim(sce.sling, "DM"), col =plotcol, pch=16, asp = 1)
-lines(SlingshotDataSet(sce.sling), lwd=2, col='black')
-
-pD.sling <- data.frame(colData(sce.sling))
-pD.sling <- left_join(pD.sling,ptime)
-
-pD.sling.p <- pD.sling[pD.sling$Experiment=="Pregnancy",]
-pD.sling.p$Condition <- factor(pD.sling.p$Condition,levels=c("CTRL","4.5dG","9.5dG","14.5dG","1","2","3","4"))
-pD.sling.t <- pD.sling[pD.sling$Experiment=="Tumorigenesis",]
-pD.sling.t <- pD.sling.t[pD.sling.t$ptimeBin %in% c(1,2,3,4),]
-pD.sling.t$Condition <- pD.sling.t$ptimeBin
-
-p <- ggplot(pD.sling, aes(x=DC1, y=DC2, color=slingPseudotime_1)) +
-    geom_point(size=.5) +
-    scale_color_viridis(option="B")
-
-
-p.p <- ggplot(pD.sling.p, aes(x=DC1, y=DC2, color=slingPseudotime_1)) +
-    geom_point(data=pD.sling[,c("DC1","DC2")], color="grey80",size=.5) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-p.t <- ggplot(pD.sling.t, aes(x=DC1, y=DC2, color=slingPseudotime_1)) +
-    geom_point(data=pD.sling[,c("DC1","DC2")], color="grey80",size=.5) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-plot_grid(p.p,p.t,ncol=1)
-
-p.p <- ggplot(pD.sling.p, aes(x=UMAP1, y=UMAP2, color=slingPseudotime_1)) +
-    geom_point(data=pD.sling[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-p.t <- ggplot(pD.sling.t, aes(x=UMAP1, y=UMAP2, color=slingPseudotime_1)) +
-    geom_point(data=pD.sling[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-plot_grid(p.p,p.t,ncol=1)
-
-p.p <- ggplot(pD.sling.p, aes(x=Condition, y=slingPseudotime_1)) +
-    geom_violin() 
-
-p.t <- ggplot(pD.sling.t, aes(x=factor(ptimeBin), y=slingPseudotime_1)) +
-    geom_violin() 
-
-plot_grid(p.p,p.t,nrow=1)
-
-
-```
-
-# Diff between endpoints
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-g0 <- na.omit(pD.sling$barcode[pD.sling$slingPseudotime_1>.07 & pD.sling$DC2>0.01])
-g1 <- na.omit(pD.sling$barcode[pD.sling$slingPseudotime_1>.07 & pD.sling$DC2<0.01 & pD.sling$DC2>-0.01 & pD.sling$DC1 < -0.015])
-
-sce.states <- sce.sling[,sce.sling$barcode %in% c(g0,g1)]
-
-sce.states$States <- plyr::mapvalues(sce.states$barcode,
-				 c(g0,g1),
-				 c(rep("Av1",length(g0)),
-				 rep("Av2",length(g1))))
-
-ggplot(data.frame(colData(sce.states)), aes(x=DC1,y=DC2)) +
-    geom_point(data=pD.sling[,c("DC1","DC2")],color="grey80") +
-    geom_point(aes(color=States)) 
-
-smrzd <- aggregateAcrossCells(sce.states,
-			      id=colData(sce.states)[,c("SampleID","States")])
-
-library(edgeR)
-y <- DGEList(counts(smrzd), samples=colData(smrzd))
-
-#Filter Genes
-keep <- filterByExpr(y, group=smrzd$States)
-y <- y[keep,]
-#Filter Samples
-keep.smp <- !scater::isOutlier(colSums(y$counts),log=TRUE,type="lower",nmad=1)
-y <- y[,keep.smp]
-y <- calcNormFactors(y)
-# y$samples$Group <- factor(y$samples$Group, levels=c("LpC","LpG","LpT","AvG","AvT"))
-des <- model.matrix(~ Batch + States, y$samples)
-
-y <- estimateDisp(y, des)
-
-fit <- glmQLFit(y, des, robust=TRUE)
-
-res <- glmQLFTest(fit, coef=ncol(des))
-topD <- topTags(res,n=nrow(res))$table
-		     
-
-
-dirtyPlot <- function(fplot){
-    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
-    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
-    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
-    sub.gse %>%
-	mutate(hitsPerc=(Significant/200)*100) %>% 
-			    ggplot(aes(y=hitsPerc, 
-				       x=Term, 
-				       fill=Fisher
-				       )) +
-				geom_col() +
-				expand_limits(x=0) +
-				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
-				geom_text(aes(label=Term),y=1,
-					  hjust=0,
-					  color="grey30") +
-				ylim(c(0,50)) +
-				scale_fill_viridis(begin=1,end=0) +
-				theme(axis.text.y=element_blank(),
-				      axis.ticks.y=element_blank()) +
-				coord_flip() 
-}
-
-topD$Gene <- rownames(topD)
-ggplot(topD, aes(x=logFC, y=-log10(FDR))) +
-    geom_point() +
-    geom_label_repel(data=topD[topD$FDR<0.01 & abs(topD$logFC)>2,],aes(label=Gene)) +
-    theme(text=element_text(size=14))
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC>0,0.001,1)
-dirtyPlot(topD)
-
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC<0,0.001,1)
-dirtyPlot(topD)
-
-features <- c(topD$Gene[topD$logFC>0][1:20])
-plotExpression(sce.states,x="Group",features,scales="free")
-```
-
-# Discretizing
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-g0 <- na.omit(pD.sling$barcode[pD.sling$slingPseudotime_1<.02])
-g1 <- na.omit(pD.sling$barcode[pD.sling$slingPseudotime_1>.07])
-
-sce.states <- sce.sling[,sce.sling$barcode %in% c(g0,g1)]
-
-sce.states$States <- plyr::mapvalues(sce.states$barcode,
-				 c(g0,g1),
-				 c(rep("Lp",length(g0)),
-				 rep("Av",length(g1))))
-
-sce.states$Group <- NA
-sce.states$Group[grepl("WKBR",sce.states$Condition )] <- "T"
-sce.states$Group[grepl("dG",sce.states$Condition )] <- "G"
-sce.states$Group[grepl("^C",sce.states$Condition )] <- "C"
-
-sce.states$Group <- paste0(sce.states$States,sce.states$Group)
-
-ggplot(data.frame(colData(sce.states)), aes(x=DC1,y=DC2)) +
-    geom_point(aes(color=Group)) +
-    facet_wrap(~Experiment)
-
-smrzd <- aggregateAcrossCells(sce.states,
-			      id=colData(sce.states)[,c("SampleID","Group")])
-
-library(edgeR)
-y <- DGEList(counts(smrzd), samples=colData(smrzd))
-
-#Filter Genes
-keep <- filterByExpr(y, group=smrzd$Group)
-y <- y[keep,]
-#Filter Samples
-keep.smp <- !scater::isOutlier(colSums(y$counts),log=TRUE,type="lower",nmad=1)
-y <- y[,keep.smp]
-y <- calcNormFactors(y)
-y$samples$Group <- factor(y$samples$Group, levels=c("LpC","LpG","LpT","AvG","AvT"))
-des <- model.matrix(~ Batch + Group, y$samples)
-
-y <- estimateDisp(y, des)
-
-fit <- glmQLFit(y, des, robust=TRUE)
-
-con <- makeContrasts("GroupAvT-GroupAvG",levels=des)
-res <- glmQLFTest(fit, contrast=con)
-topD <- topTags(res,n=nrow(res))$table
-		     
-
-
-dirtyPlot <- function(fplot){
-    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
-    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
-    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
-    sub.gse %>%
-	mutate(hitsPerc=(Significant/200)*100) %>% 
-			    ggplot(aes(y=hitsPerc, 
-				       x=Term, 
-				       fill=Fisher
-				       )) +
-				geom_col() +
-				expand_limits(x=0) +
-				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
-				geom_text(aes(label=Term),y=1,
-					  hjust=0,
-					  color="grey30") +
-				ylim(c(0,50)) +
-				scale_fill_viridis(begin=1,end=0) +
-				theme(axis.text.y=element_blank(),
-				      axis.ticks.y=element_blank()) +
-				coord_flip() 
-}
-
-topD$Gene <- rownames(topD)
-ggplot(topD, aes(x=logFC, y=-log10(FDR))) +
-    geom_point() +
-    geom_label_repel(data=topD[topD$FDR<0.01 & abs(topD$logFC)>2,],aes(label=Gene))
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC>0,0.001,1)
-dirtyPlot(topD)
-
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC<0,0.001,1)
-dirtyPlot(topD)
-
-features <- c(topD$Gene[topD$logFC>0][1:20])
-plotExpression(sce.states,x="Group",features,scales="free")
-```
-
-# Binning
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-sce.states <- sce.sling
-sce.states$States <- cut(sce.states$slingPseudotime_1,10,labels=FALSE)
-
-sce.states$Group <- NA
-sce.states$Group[grepl("WKBR",sce.states$Condition )] <- "T"
-sce.states$Group[grepl("dG",sce.states$Condition )] <- "G"
-sce.states$Group[grepl("^C",sce.states$Condition )] <- "C"
-
-#sce.states$Group <- paste0(sce.states$States,sce.states$Group)
-
-smrzd <- aggregateAcrossCells(sce.states,
-			      id=colData(sce.states)[,c("SampleID","States","Group")])
-
-library(edgeR)
-y <- DGEList(counts(smrzd), samples=colData(smrzd))
-
-#Filter Genes
-keep <- filterByExpr(y, group=smrzd$States)
-y <- y[keep,]
-#Filter Samples
-keep.smp <- !scater::isOutlier(colSums(y$counts),log=TRUE,type="lower",nmad=1)
-y <- y[,keep.smp]
-y <- calcNormFactors(y)
-#y$samples$Group <- factor(y$samples$Group, levels=c("LpC","LpG","LpT","AvG","AvT"))
-des <- model.matrix(~ States + Group, y$samples)
-
-y <- estimateDisp(y, des)
-
-fit <- glmQLFit(y, des, robust=TRUE)
-
-res <- glmQLFTest(fit, coef=ncol(des))
-topD <- topTags(res,n=nrow(res))$table
-		     
-dirtyPlot <- function(fplot){
-    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
-    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
-    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
-    sub.gse %>%
-	mutate(hitsPerc=(Significant/200)*100) %>% 
-			    ggplot(aes(y=hitsPerc, 
-				       x=Term, 
-				       fill=Fisher
-				       )) +
-				geom_col() +
-				expand_limits(x=0) +
-				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
-				geom_text(aes(label=Term),y=1,
-					  hjust=0,
-					  color="grey30") +
-				ylim(c(0,50)) +
-				scale_fill_viridis(begin=1,end=0) +
-				theme(axis.text.y=element_blank(),
-				      axis.ticks.y=element_blank()) +
-				coord_flip() 
-}
-
-# fplot$fFDR <- ifelse(fplot$SigOT & fplot$AvT>0,0.0001,1)
-# dirtyPlot(fplot)
-# fplot$fFDR <- ifelse(fplot$SigOT & fplot$AvT<0,0.0001,1)
-# dirtyPlot(fplot)
-
-topD$Gene <- rownames(topD)
-ggplot(topD, aes(x=logFC, y=-log10(FDR))) +
-    geom_point() +
-    geom_label_repel(data=topD[topD$FDR<0.01 & abs(topD$logFC)>2,],aes(label=Gene))
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC>0,0.001,1)
-dirtyPlot(topD)
-
-topD$fFDR <- ifelse(topD$FDR<0.01 & topD$logFC<0,0.001,1)
-dirtyPlot(topD)
-
-features <- c(topD$Gene[topD$logFC<0][1:5])
-plotExpression(sce.states,x="States",colour_by="Group",features,scales="free")
-```
-
-```{r, fig.width=10, fig.height=4, warning=FALSE, message=FALSE,eval=FALSE}
-require(reshape2)
-bubblePlot(logcounts(sce.states), genes, factor(sce.states$States) ,angled=TRUE) %+% coord_flip() %+% scale_color_viridis(option="scale zero rowsC")
-```
-
-```{r, fig.width=8, fig.height=6, warning=FALSE, message=FALSE,eval=FALSE}
-plotGSE(mrk,"Av1")
-plotGSE(mrk,"Av2")
-plotGSE(mrk,"Stem")
-plotGSE(mrk,"Cycl")
-```
-
-## Differential Expression along trajectories
-I do this for now mainly to better understand the biology
-
-## Branch 1
-```{r fitGAM, fig.width=5, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-require(lmtest)
-fullDat <- logcounts(sce.sling)
-fullDat <- t(fullDat[rowMeans(fullDat)>0.01,])
-set.seed(42)
-genes  <- colnames(fullDat)
-#initialize m.smooth matrix
-m.smooth <- matrix(nrow=ncol(fullDat),ncol=nrow(fullDat))
-colnames(m.smooth) <- rownames(fullDat)
-rownames(m.smooth) <- colnames(fullDat)#[genes]
-# take m.smooth het to allow allocation of vectors for columns
-m.smooth <- t(m.smooth)
-
-#initialize result df
-res <- data.frame()
-for (gene in genes) {
-    # Set x and y
-    x <- sce.sling$slingPseudotime_1
-    g <- factor(sce.sling$Experiment)
-    y <- fullDat[,gene]
-
-    # Define null and alternative model
-    mod0 <- lm(y ~ ns(x,df=3))
-    mod1 <- lm(y ~ g * ns(x,df=3))
-
-    # Extract coefficients
-    cfs <- mod1$coefficients
-    names(cfs) <- paste0("c",c(0:(length(cfs)-1)))
-
-    # Likelihood ratio test
-    lrt <- lrtest(mod0,mod1)
-    p <- lrt[2,5]
-
-    # Linear model for gradient
-    #     lmmod <- lm(mod1$fitted.values~x)
-    #     pgrad <- summary(lmmod)[[4]][2,4]
-    #     gradient <- ifelse(pgrad < 0.01, lmmod$coefficients[2],0)
-
-    # Combine in df
-    tmp <- data.frame(Gene=gene,
-		      PValue=p)
-#		      gradient=gradient)
-    tmp <- cbind(tmp,t(cfs))
-    res <- rbind(res,tmp)
-
-    # Update fitted Value gene expression matrix
-    m.smooth[,gene] <- mod1$fitted.values
-}
-rownames(res) <- res$Gene
-m.smooth <- t(m.smooth)
-
-# Adjust for multiple testing
-keep <- ((apply(m.smooth,1,max)-apply(m.smooth,1,min))>=0.5)
-res.sub <- res[keep,]
-res.sub$PAdjust<- p.adjust(res.sub$PValue)
-
-res <- res[order(res$PValue),]
-
-
-pD <- data.frame(colData(sce.sling))
-
-pD$SmoothExpr <- m.smooth["B2m",]
-pD$Expr <- fullDat[,"B2m"]
-ggplot(pD, aes(x=slingPseudotime_1, y=Expr, color=Experiment)) +
-    geom_point(size=.3) +
-    geom_line(aes(y=SmoothExpr),lwd=2)
-
-pD$SmoothExpr <- m.smooth["Notch1",]
-pD$Expr <- fullDat[,"Notch1"]
-
-ggplot(pD, aes(x=slingPseudotime_1, y=Expr, color=Experiment)) +
-    geom_point(size=.3) +
-    geom_line(aes(y=SmoothExpr),lwd=2) +
-    scale_color_manual(values=c("black","grey80"))
-
-
-```
-
-```{r fitGAM, fig.width=5, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-library(gam)
-ptm <- sce.sling$slingPseudotime_1
-Y <- logcounts(sce.sling)
-dec <- modelGeneVar(sce.sling,block=sce.sling$Batch)
-hvgs <- getTopHVGs(dec)
-Y <- Y[hvgs,]
-# fit a GAM with a loess term for pseudotime
-gam.pval <- apply(Y,1,function(z){
-    d <- data.frame(z=z, ptmt=ptm)
-    suppressWarnings({
-      tmp <- suppressWarnings(gam(z ~ lo(ptm), data=d))
-    })
-    p <- summary(tmp)[3][[1]][2,3]
-    p
-})
-
-topgenes <- names(sort(gam.pval, decreasing = FALSE))[1:100]
-heatdata <- as.matrix(logcounts(sce.sling)[topgenes, order(ptm, na.last = NA)])
-heatdata <- heatdata/rowMax(heatdata)
-library(pheatmap)
-pheatmap(as.matrix(heatdata),
-	 cluster_cols=FALSE,
-	 show_colnames=FALSE)
-```
-
-## Differential Abundance along trajectories
-- Comparing the two conditions along the trajectories
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE,eval=FALSE}
-library(RColorBrewer)
-n <- ncol(sce.sling)
-pt <- slingPseudotime(sce.sling)
-cw <- slingCurveWeights(sce.sling)
-condition <- factor(sce.sling$Experiment)
-levels(condition) <- c("P","T")
-pD.sling$Assignment <- assignment <- apply(cw, 1, which.max)
-ptAs <- c() #assigned pseudotime
-for(ii in 1:nrow(pt)) ptAs[ii] <- pt[ii,assignment[ii]] 
-noise <- runif(n, -.05,.05)
-
-layout(matrix(1:3,nrow=3))
-plot(ptAs[assignment == 1], (as.numeric(condition)+noise)[assignment == 1], 
-     col = brewer.pal(9,'Set1')[condition[assignment == 1]],
-     xlab="Pseudotime", ylab="Condition", main="Lineage 1", pch=16, axes = FALSE,
-     cex=.5)
-axis(1); axis(2, at=seq_along(levels(condition)), labels = levels(condition), las = 1)
-plot(ptAs[assignment == 2], (as.numeric(condition)+noise)[assignment == 2], 
-     col = brewer.pal(9,'Set1')[condition[assignment == 2]],
-     xlab="Pseudotime", ylab="Condition", main="Lineage 2", pch=16, axes = FALSE,
-     cex=.5)
-axis(1); axis(2, at=seq_along(levels(condition)), labels = levels(condition), las = 1)
-plot(ptAs[assignment == 3], (as.numeric(condition)+noise)[assignment == 3], 
-     col = brewer.pal(9,'Set1')[condition[assignment == 3]],
-     xlab="Pseudotime", ylab="Condition", main="Lineage 3", pch=16, axes = FALSE,
-     cex=.5)
-axis(1); axis(2, at=seq_along(levels(condition)), labels = levels(condition), las = 1)
-layout(1)
-
-
-# cond1 <- factor(condition[assignment == 1])
-# t1 <- ptAs[assignment == 1]
-# m1 <- glm(cond1 ~ t1, family = quasibinomial(link = "logit"))
-# summary(m1)
-# 
-# cond2 <- factor(condition[assignment == 2])
-# t2 <- ptAs[assignment == 2]
-# m2 <- glm(cond2 ~ t2, family = quasibinomial(link = "logit"))
-# summary(m2)
-# 
-# cond3 <- factor(condition[assignment == 3])
-# t3 <- ptAs[assignment == 3]
-# m3 <- glm(cond3 ~ t3, family = quasibinomial(link = "logit"))
-# summary(m3)
-
-```
-
-# Diffusion Map wo CC genes
-Here I try to compute a diffusion map after taking out genes related to cell cycle
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE, eval=FALSE}
-# Get CC genes
-library(org.Mm.eg.db)
-cc.genes <- select(org.Mm.eg.db, keys="GO:0007049", keytype="GOALL", column="ENSEMBL")
-rD <- data.frame(rD)
-cc.genes <- rownames(rD)[rD$ID %in% cc.genes$ENSEMBL]
-
-# Compute Diffusion map on alveolar an lp cells
-sce.sub <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
-sce.sub <- sce.sub[!rownames(sce.sub) %in% rmgenes,]
-dec <- modelGeneVar(sce.sub,
-		    block=sce.sub$Batch)
-		   # subset.row=!(rownames(sce.sub) %in% rmgenes))
-# top <- getTopHVGs(dec)
-sce.sub <- denoisePCA(sce.sub,dec)
-
-pcs <- reducedDim(sce.sub,"PCA")
-
-set.seed(42)
-library(destiny)
-dm <- DiffusionMap(pcs)
-pD.sub <- data.frame(colData(sce.sub))
-dcs <- eigenvectors(dm)
-
-# Clustering in that space to facilitate some analyses
-set.seed(42)
-igr <- buildSNNGraph(pcs$x,d=NA,transposed=TRUE,k=40)
-cls <- igraph::cluster_louvain(igr)$membership
-
-# Save in colData
-sce.sub$DC1 <- pD.sub$DC1 <- dcs[,1]
-sce.sub$DC2 <- pD.sub$DC2 <- dcs[,2]
-sce.sub$Cluster <- pD.sub$Cluster <- paste0("C",cls)
-
-ggplot(pD.sub, aes(x=DC1, y=DC2, color=CellTypesFinal)) +
-    geom_point(data=pD.sub[,c("DC1","DC2")], color="grey80",size=.5) +
-    geom_point(size=.5) +
-    facet_wrap(~Batch)
-
+genes <- c("Krt5","Krt8","Krt18","Acta2","Elf5","Csn2","Csn1s1","Glycam1","Wap",
+	   "Esr1","Cited1","Pgr","Ly6a","Aldh1a3","Kit","Cd14","Lalba","Prlr",
+	   "Col4a1","Epcam","Asz1","Skap1","Oas2","Lgals3bp",
+	   "Cxcl14","Sfn","Socs3","Egr2","Gas1","Actg2")
+sce.full$CellTypesFinal <- renameForPlot(sce.full$CellTypesFinal)
+bubblePlot(logcounts(sce.full), genes, sce.full$CellTypesFinal ,angled=TRUE) %+% coord_flip() +
+    scale_color_gradient2(low="white",high=hi) +
+    theme(axis.text=element_text(size=10))
+ggsave(paste0(outdr,"GEX_selected_Heatmap_horizontal.pdf"),width=6,height=3)
+bubblePlot(logcounts(sce.full), genes, sce.full$CellTypesFinal ,angled=TRUE) +
+    scale_color_gradient2(low="white",high=hi) +
+    theme(axis.text=element_text(size=10))
+ggsave(paste0(outdr,"GEX_selected_Heatmap_vertical.pdf"),height=6,width=3)
 ```

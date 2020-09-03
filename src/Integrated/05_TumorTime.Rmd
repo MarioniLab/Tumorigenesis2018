@@ -49,6 +49,8 @@ colnames(sce) <- sce$barcode ### I have to fix this somewhere else
 pD <- data.frame(colData(sce))
 set.seed(42)
 pD <- pD[sample(nrow(pD),nrow(pD)),]
+outsup <- "../../data/figures/Supplementary/"
+outf1 <- "../../data/figures/Figure1/"
 ```
 
 ## Sample Overview
@@ -218,7 +220,7 @@ pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
 			 color=NULL),
 		     arrow=arrow(length=unit(0.5, "cm"))) +
     geom_dotplot(aes(fill=Condition, group=Condition), binwidth=1, 
-		 stackgroups=TRUE, binpositions="all", dotsize=2) +
+		 stackgroups=TRUE, binpositions="all", dotsize=3.5) +
     xlim(0,110) +
     ylim(0,.5) +
     xlab("Pseudotime") +
@@ -233,8 +235,8 @@ pseudotimeplt_byCond <- ggplot(sumry, aes(x=ptime, y=0)) +
 	  axis.ticks.x=element_line(size=1, linetype="solid"),
 	  axis.ticks.length.x=unit(.5,"cm"))
 
-timeplt_byCond
-pseudotimeplt_byCond
+ggsave(paste0(outsup,"TimeplotByCondition.pdf"),timeplt_byCond)
+ggsave(paste0(outsup,"TimeplotByPseudotime.pdf"),pseudotimeplt_byCond)
 ```
 
 # Sanity Checks
@@ -262,6 +264,7 @@ ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
     ylab("Age [w]") +
     theme_pub()
     #     geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
+ggsave(paste0(outsup,"CorrelationWithAge.pdf"),pseudotimeplt_byCond)
 ```
 
 ## MPA-DMBA Data
@@ -444,7 +447,7 @@ for (i in seq_along(topLoads)) {
 			mutate(hitsPerc=Significant*100/length(gens)) %>% 
 			ggplot(aes(y=hitsPerc, 
 				   x=Term, 
-				   fill=Fisher.classic
+				   fill=-log10(Fisher.classic)
 				   )) +
 			    geom_col() +
 			    theme_pub() +
@@ -462,6 +465,7 @@ p.ld
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
 out[[2]]
+ggsave(paste0(outsup,"LoadingGOTerms.pdf"),width=12.2,height=5.6)
 out[[1]]
 ```
 
@@ -506,7 +510,7 @@ bins <- data.frame("PC1"=c(mean(c(binbounds[1],binbounds[2])),
 			 mean(c(binbounds[3],binbounds[4])),
 			 mean(c(binbounds[4],binbounds[5])),
 			 75),
-		   "PC2"=c(60,60,60,60,60),
+		   "PC2"=c(70,70,70,70,70),
 		   "Age"=c(mean(pcs.all$Age[pcs.all$PC1 < binbounds[2]]),
 			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[2] & pcs.all$PC1 < binbounds[3]]),
 			   mean(pcs.all$Age[pcs.all$PC1 > binbounds[3] & pcs.all$PC1 < binbounds[4]]),
@@ -517,36 +521,74 @@ bins <- data.frame("PC1"=c(mean(c(binbounds[1],binbounds[2])),
 bins$Age <- round(bins$Age,1)
 bins$Age <- paste0(bins$Age,"w")
 
+library(RColorBrewer)
+col.t <- brewer.pal(n=6,"PuRd")
 
-p1_col <- ggplot(pcs.all, aes(x=PC1, y=PC2, fill=Tumor)) +
+p1 <- ggplot(pcs.all, aes(x=PC1, y=PC2, fill=Tumor)) +
     geom_rect(aes(xmin=-Inf,
 		      xmax = binbounds[2],
 		      ymin = -Inf,
-		      ymax = Inf), fill = 'pink', alpha = 0.02) +
+		      ymax = Inf), fill = col.t[1], alpha = 0.3) +
     geom_rect(aes(xmin=binbounds[2],
 		      xmax = binbounds[3],
 		      ymin = -Inf,
-		      ymax = Inf), fill = 'pink', alpha = 0.06) +
+		      ymax = Inf), fill = col.t[2], alpha = 0.3) +
     geom_rect(aes(xmin=binbounds[3],
 		      xmax = binbounds[4],
 		      ymin = -Inf,
-		      ymax = Inf), fill = 'pink', alpha = 0.10) +
+		      ymax = Inf), fill = col.t[3], alpha = 0.3) +
     geom_rect(aes(xmin=binbounds[4],
 		      xmax = binbounds[5],
 		      ymin = -Inf,
-		      ymax = Inf), fill = 'pink', alpha = 0.20) +
+		      ymax = Inf), fill = col.t[4], alpha = 0.3) +
     geom_rect(aes(xmin=binbounds[5],
 		      xmax = Inf,
 		      ymin = -Inf,
-		      ymax = Inf), fill = 'red', alpha = 0.03) +
+		      ymax = Inf), fill = col.t[5], alpha = 0.1) +
+    geom_vline(xintercept=binbounds, lty="dashed") +
+    geom_point(size=4,pch=21) + #This is just laziness 
+    geom_text(data=bins,aes(label=Age, fill=NULL),fontface="bold",size=6) +
+    theme_pub() +
+    theme(legend.position="none") +
+    scale_fill_manual(values=c("grey80","grey40")) +
+    xlab("-PC1") +
+    coord_fixed(1)
+p1
+
+ggsave(paste0(outf1,"PCAPlot.pdf"))
+
+p1_wp53 <- ggplot(pcs.all, aes(x=PC1, y=PC2, fill=Tumor)) +
+    geom_rect(aes(xmin=-Inf,
+		      xmax = binbounds[2],
+		      ymin = -Inf,
+		      ymax = Inf), fill = col.t[1], alpha = 0.3) +
+    geom_rect(aes(xmin=binbounds[2],
+		      xmax = binbounds[3],
+		      ymin = -Inf,
+		      ymax = Inf), fill = col.t[2], alpha = 0.3) +
+    geom_rect(aes(xmin=binbounds[3],
+		      xmax = binbounds[4],
+		      ymin = -Inf,
+		      ymax = Inf), fill = col.t[3], alpha = 0.3) +
+    geom_rect(aes(xmin=binbounds[4],
+		      xmax = binbounds[5],
+		      ymin = -Inf,
+		      ymax = Inf), fill = col.t[4], alpha = 0.3) +
+    geom_rect(aes(xmin=binbounds[5],
+		      xmax = Inf,
+		      ymin = -Inf,
+		      ymax = Inf), fill = col.t[5], alpha = 0.1) +
     geom_vline(xintercept=binbounds, lty="dashed") +
     geom_point(size=2,pch=21) + #This is just laziness 
     geom_point(data=add, size=4, pch=21, fill="blue") +
     geom_text(data=bins,aes(label=Age, fill=NULL),fontface="bold",size=6) +
     geom_text_repel(data=add,aes(label=Age, fill=NULL),fontface="bold",size=6) +
     theme_pub() +
-    theme(legend.position="none") 
-p1_col
+    theme(legend.position="none") +
+    xlab("-PC1") +
+    coord_fixed(1)
+p1_wp53
+ggsave(paste0(outsup,"PCAPlotWP53.pdf"))
 ```
 
 # Session Info and Save
