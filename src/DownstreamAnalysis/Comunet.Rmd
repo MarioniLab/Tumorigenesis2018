@@ -1,0 +1,287 @@
+---
+title: "Comunet on CellPhoneDB results"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Read in Data
+- First I have to load all the 10 (!) different conditions and convert to comunet objects
+```{r, message=FALSE,warning=FALSE}
+library(ggplot2)
+library(COMUNET)
+library(eulerr)
+options(stringsAsFactors = F)
+fldr <- "../../data/Downstream/CellPhoneDB_ImmEpi_out/"
+conds <- c("WTYoung","4dG","9dG","14dG","WTOld","bin1","bin2","bin3","bin4")
+complex_input <- read.csv("complex_input.csv")
+complex_input$complex_name <- gsub("_"," ",complex_input$complex_name)
+gene_input <- read.csv("gene_input.csv")
+
+i.list <- list()
+# Read in CPD
+for (cond in conds) {
+    dr <- paste0(fldr,cond)
+    cpd <- read.csv(paste0(dr,"/significant_means.txt"),sep="\t",check.names=FALSE)
+    cpd <- cpd[!duplicated(cpd$interacting_pair),]
+
+    # add row names (interacting pairs)
+    rownames(cpd) <- cpd$interacting_pair
+
+    # transform 'receptor_a' colomn into boolean
+    cpd$receptor_a  <- sapply(cpd$receptor_a
+					     ,function(i){
+					       if(i == "True") T else F
+					     }
+    )
+
+    # transform 'receptor_b' colomn into boolean
+    cpd$receptor_b  <- sapply(cpd$receptor_b
+					     ,function(i){
+					       if(i == "True") T else F
+					     }
+    )
+
+    # Cond1 (AML328_d0)
+    i.list[[cond]] <- convert_CellPhoneDB_output(CellPhoneDB_output = cpd,
+					       complex_input = complex_input,
+					       gene_input = gene_input)
+}
+
+
+plotEuler <- function(cond1, cond2, i.list=i.list) {
+    library(eulerr)
+    my_list <- list(i.list[[cond1]]$ligand_receptor_pair_df$pair
+		    ,i.list[[cond2]]$ligand_receptor_pair_df$pair)
+    names(my_list) <- c(cond1,
+			cond2)
+    euler_plot <- plot(euler(my_list)
+		      ,quantities = list(fontsize = 18)
+		      ,counts = TRUE
+		      ,labels = list(fontsize = 18)
+		     )
+    print(euler_plot)
+}
+
+comp <- function(cond1, cond2) {
+    # Run comparative analysis
+    result <- comparative_analysis(cond1_weight_array = i.list[[cond1]]$weight_array
+				  ,cond2_weight_array = i.list[[cond2]]$weight_array
+				  ,cond1_ligand_receptor_pair_df = i.list[[cond1]]$ligand_receptor_pair_df
+				  ,cond2_ligand_receptor_pair_df = i.list[[cond2]]$ligand_receptor_pair_df
+				  ,cond1_nodes = i.list[[cond1]]$nodes
+				  ,cond2_nodes = i.list[[cond2]]$nodes
+				  ,cond1_name = cond1
+				  ,cond2_name = cond2
+				  )
+    return(result)
+}
+
+getDiffPairs <- function(result,i.list=i.list) {
+    # most different ligand-receptor pair
+    out <- result$sorted_LRP_df$pair[result$sorted_LRP_df$presence == "shared" &
+					   result$sorted_LRP_df$dissimilarity == max(result$sorted_LRP_df$dissimilarity)]
+    return(out)
+}
+
+
+plotComGraphs <- function(i.list=i.list,LRP,m.frow=c(2,5),conds=NULL) {
+    par(mfrow=m.frow)
+    if (is.null(conds)) {
+	conds <- names(i.list)
+    }
+    for (cond in conds) {
+	plot_communication_graph(LRP=LRP,
+				 weight_array=i.list[[cond]]$weight_array,
+				 ligand_receptor_pair_df=i.list[[cond]]$ligand_receptor_pair_df,
+				 nodes= i.list[[cond]]$node,
+				 title=LRP,
+				 subtitle=cond)
+    }
+}
+```
+
+# Intersections
+We can first look at what interactions are present in the entire dataset per condition and see how they overlap with one another. Note that this does not take into account between which cell types the interaction takes place
+```{r, message=FALSE,warning=FALSE,fig.width=14,fig.height=6}
+library(UpSetR)
+listInput <- lapply(i.list, function(x) x$ligand_receptor_pair_df$pair)
+upset(fromList(listInput),nsets=length(listInput),order.by="freq",nintersects=60)
+```
+
+### Some hand picked ones
+#### Potentially Interesing w regards to epithelium
+```{r, message=FALSE,warning=FALSE,fig.width=20,fig.height=5}
+LRP <- "TNFSF11:TNFRSF11A"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "IGF2:IGF2R"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "TGFB2:TGFbeta receptor1"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "LIF:LIFR"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "FGF1:FGFR2"
+plotComGraphs(i.list=i.list,LRP=LRP)
+```
+
+#### Potentially Interesing w regards to immune
+```{r, message=FALSE,warning=FALSE,fig.width=20,fig.height=5}
+LRP <- "CDH1:KLRG1"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "CD70:CD27"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "IFNB1:Type I IFNR"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "IL10:IL10 receptor"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "CTLA4:CD80"
+plotComGraphs(i.list=i.list,LRP=LRP)
+LRP <- "XCL1:XCR1"
+plotComGraphs(i.list=i.list,LRP=LRP)
+```
+
+# Differences in interactions
+As they are now stored as graphs we can compute dissimilarity measures between the graphs and find interactions that are highly dissimilar (in a pair-wise fashion).
+For example these are "very different" interactions in Bin1 vs. WTOld
+```{r, message=FALSE,warning=FALSE,fig.width=20,fig.height=5}
+res <- comp("WTOld","bin1")
+diffs <- getDiffPairs(res)
+```
+
+### Comparisons
+
+- This is from bin1 vs. WT1
+```{r, message=FALSE,warning=FALSE,fig.width=20,fig.height=5}
+for (dif in diffs) {
+    plotComGraphs(i.list=i.list,LRP=dif)
+}
+plotComGraphs(i.list=i.list,LRP="SPP1:CD44")
+plotComGraphs(i.list=i.list,LRP="SPP1:PTGER4")
+plotComGraphs(i.list=i.list,LRP="SPP1:a4b1 complex")
+plotComGraphs(i.list=i.list,LRP=diffs[5])
+```
+
+- This is bin1 vs. bin4
+- cd96-nectin1
+```{r, message=FALSE,warning=FALSE,fig.width=20,fig.height=5}
+res <- comp("bin1","bin4")
+diffs <- getDiffPairs(res)
+for (dif in diffs) {
+    plotComGraphs(i.list=i.list,LRP=diffs[3])
+}
+```
+# Counting interactions
+- Always been convinced that this doesn't make much sense.
+```{r, message=FALSE,warning=FALSE}
+sumlist <- list()
+for (cond in conds) {
+    i1 <- i.list[[cond]]
+    intlist <- plyr::alply(i1$weight_array,3)
+    intlist <- lapply(intlist, function(x) (x>0)*1)
+    sums <- Reduce("+",intlist)
+    sums <- sums + t(sums)
+    diag(sums) <- diag(sums) / 2
+    sumlist[[cond]] <- sums
+}
+# igr <- igraph::graph.adjacency(sums, mode="undirected", weighted=TRUE)
+# ews <- 2.5
+# ew <- (E(igr)$weight/max(E(igr)$weight))*ews
+# igraph::plot.igraph(igr, layout=layout.circle(igr), edge.curved=TRUE,
+#                     edge.width=ew)
+library(pheatmap)
+pheatmap(sumlist[["bin4"]]-sumlist[["bin1"]],
+	 #          cluster_cols=FALSE,
+	 #      WTOld    cluster_rows=FALSE,
+	 clustering_method="ward.D2",
+	 display_numbers=TRUE,
+	 number_format="%.0f")
+```
+
+```{r, message=FALSE,warning=FALSE}
+sumlist <- list()
+for (cond in conds) {
+    i1 <- i.list[[cond]]
+    intlist <- plyr::alply(i1$weight_array,3)
+    intlist <- lapply(intlist, function(x) (x>0)*1)
+    sums <- Reduce("+",intlist)
+    sums <- sums + t(sums)
+    diag(sums) <- diag(sums) / 2
+    sumlist[[cond]] <- sums
+}
+# igr <- igraph::graph.adjacency(sums, mode="undirected", weighted=TRUE)
+# ews <- 2.5
+# ew <- (E(igr)$weight/max(E(igr)$weight))*ews
+# igraph::plot.igraph(igr, layout=layout.circle(igr), edge.curved=TRUE,
+#                     edge.width=ew)
+library(pheatmap)
+pheatmap(sumlist[["14dG"]]-sumlist[["4dG"]],
+	 #          cluster_cols=FALSE,
+	 #      WTOld    cluster_rows=FALSE,
+	 clustering_method="ward.D2",
+	 display_numbers=TRUE,
+	 number_format="%.0f")
+```
+
+```{r, message=FALSE,warning=FALSE}
+i1 <- i.list[["bin1"]]
+intlist1 <- plyr::alply(i1$weight_array,3)
+intlist1 <- lapply(intlist1, function(x) (x>0)*1)
+names(intlist1) <- i1$ligand_receptor_pair_df$pair
+
+i4 <- i.list[["bin4"]]
+intlist4 <- plyr::alply(i4$weight_array,3)
+intlist4 <- lapply(intlist4, function(x) (x>0)*1)
+names(intlist4) <- i4$ligand_receptor_pair_df$pair
+
+comn <- intersect(names(intlist1),names(intlist4))
+only1 <- setdiff(names(intlist1),names(intlist4))
+only4 <- setdiff(names(intlist4),names(intlist1))
+
+# Interaction-wise substraction of 4 - 1 for common interactions
+comdf <- lapply(comn, function(LRP) intlist4[[LRP]]-intlist1[[LRP]])
+sums <- Reduce("+",comdf)
+sums <- sums + t(sums)
+diag(sums) <- diag(sums) / 2
+
+# For not shared interactions add interactions that are unique to 4 and substract interactions uq to 1
+sum1 <- Reduce("+",intlist1[only1])
+sum1 <- sum1 + t(sum1)
+diag(sum1) <- diag(sum1) / 2
+
+sum4 <- Reduce("+",intlist4[only4])
+sum4 <- sum4 + t(sum4)
+diag(sum4) <- diag(sum4) / 2
+
+sumtot <- sums-sum1+sum4
+source("../functions.R")
+rownames(sumtot) <- renameForPlot(rownames(sumtot))
+colnames(sumtot) <- renameForPlot(colnames(sumtot))
+cairo_pdf("../../data/figures/Figure4/ChangeInInteractions.pdf")
+pheatmap(sumtot,
+	 #          cluster_cols=FALSE,
+	 #      WTOld    cluster_rows=FALSE,
+	 clustering_method="ward.D2",
+	 display_numbers=TRUE,
+	 number_format="%.0f",
+	 legend=FALSE)
+dev.off()
+
+int <- lapply(comn, function(LRP) {
+		    dff <- intlist4[[LRP]]-intlist1[[LRP]]
+		    out <- dff["Hs","Avd"]>0 | dff["Avd","Hs"]>0
+		    out
+	 }
+		    )
+names(int) <- comn
+int <- unlist(int)
+int <- int[int]
+plotComGraphs(i.list=i.list,LRP=names(int)[12])
+```

@@ -1,0 +1,248 @@
+---
+title: "Testing for Changes in abundance"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Load Data
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(Matrix)
+source("../functions.R")
+theme_set(theme_cowplot())
+
+sce <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
+sce <- sce[,sce$Experiment=="Tumorigenesis"]
+
+sce$CellTypes <- sce$CellTypesFinal
+outdr <- "../../data/figures/Figure2/"
+```
+
+# Differences in cluster abundance over tumor time
+I have changed to modeling the cluster abundances with rlm instead of the general NB GLM from edgeR to protect against outliers at the exterme ends of the explanatory variable.
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+pD <- data.frame(colData(sce))
+pD <- droplevels(pD[pD$Condition!="WTOld",])
+sumry <- group_by(pD, Condition, CellTypes) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+
+comb <- table(sumry$CellTypes,sumry$Condition) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypes"=rownames(missing.comb),
+		      "Condition"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypes),
+				as.character(unique(pD$CellTypes)),
+				as.character(unique(pD$Colors)))
+
+combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypes)))
+names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+sumry$CellTypes <- plyr::mapvalues(as.character(sumry$CellTypes),
+				   as.character(names(combi)),
+				   as.character(combi))
+
+sumry <- arrange(sumry, Condition, CellTypes) %>%
+    group_by(Condition) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+sumry$Condition <- factor(sumry$Condition,levels=c(5,4,3,2,1))
+levels(sumry$Condition)[1] <- "T"
+barplt <- ggplot(sumry, aes(x=Condition, y=frac*100, fill=CellTypes)) +
+    geom_bar(stat="identity",color="black") +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("") +
+    ylab("") +
+    coord_flip() +
+    theme_pub() +
+    theme(legend.position="none") 
+barplt
+
+ggsave(paste0(outdr,"Barplot_Tumor_all.pdf"))#,width=5,height=5)
+
+
+
+
+pD <- droplevels(pD[pD$Condition!="5",])
+cluster.counts <- table(pD$CellTypes, pD$SampleID)
+cluster.counts <- cluster.counts[rowMeans(cluster.counts)>10,]
+cluster.counts <- as(cluster.counts,"matrix")
+
+library(dplyr)
+sumry <- group_by(pD, SampleID, ptime) %>%
+    summarize()
+
+# EdgeR
+library(edgeR)
+# Set up DGE
+y.ab <- DGEList(cluster.counts)
+y.ab$samples$SampleID <- colnames(y.ab)
+y.ab$samples <- left_join(y.ab$samples,sumry)
+
+
+# I am rescaling ptime so that the coefficients of the model are in a more interpretable space, this does not change the results just the scale of the coeffs
+y.ab$samples$ptime <- y.ab$samples$ptime/max(y.ab$samples$ptime)
+
+tab <- data.frame()
+
+for (ct in rownames(cluster.counts)) {
+    library(MASS)
+    library(sfsmisc)
+    y.ab$samples$Counts <- cpm(y.ab, log=TRUE)[ct,]
+    fit <- rlm(formula=Counts ~  ptime, data=y.ab$samples,maxit=100)
+    ftest <- f.robftest(fit,var="ptime")
+    tmp <- data.frame("CellTypes"=ct,
+		      "lfc"=fit$coefficients[length(fit$coefficient)],
+		      "intercept"=fit$coefficients[1],
+		      "PVal"=ftest$p.value)
+    tab <- rbind(tab,tmp)
+}
+tab$FDR <- p.adjust(tab$PVal, method="BH")
+tab[order(tab$FDR,decreasing=FALSE),]
+
+addCol <- data.frame("CellTypes"=levels(pD$CellTypesFinal),
+		     "Colors"=levels(pD$Colors))
+rownames(addCol) <- addCol$CellTypes
+addCol <- addCol[as.character(tab$CellTypes),]
+tab$Colors <- addCol$Colors
+tab$Colors <- factor(tab$Colors, levels=tab$Colors)
+tab$CellTypes <- factor(tab$CellTypes, levels=tab$CellTypes)
+library(ggrepel)
+tab$CellTypes <- renameForPlot(tab$CellTypes)
+volc <- ggplot(tab, aes(x=lfc, y=-log10(FDR),fill=CellTypes)) +
+    geom_point(pch=21,size=4) +
+    geom_hline(yintercept=1,size=1.1, lty="dashed") +
+    geom_text_repel(data=tab[tab$FDR<0.1,], label=tab[tab$FDR<0.1,"CellTypes"],aes(fill=NULL),
+		     size=6, color="grey30",force=9) +
+    scale_fill_manual(values=levels(tab$Colors)) +
+    theme_pub() +
+    theme(legend.position="none") +
+    xlab("Log2(FC)")
+volc
+
+tab.tum <- tab
+
+ggsave(paste0(outdr,"Volcano.pdf"),volc,width=7.6,height=6.6)
+```
+
+# Pregnancy
+```{r, message=FALSE,warning=FALSE}
+sce <- readRDS("../../data/Integrated/Robjects/SCE_combined_final.rds")
+sce <- sce[,sce$Experiment=="Pregnancy"]
+pD <- data.frame(colData(sce))
+```
+
+## Pregnancy robust
+As I intend to compare pregnancy vs tumorigenesis I will try the same rlm approach as above but for the gestation timepoints.
+The only difference here is that I normalize for compositional biases introduced by the strong changes in a couple of clusters, if this normalization is left out almost everything changes.
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+cluster.counts <- table(pD$CellTypes, pD$SampleID)
+cluster.counts <- cluster.counts[rowMeans(cluster.counts)>10,]
+cluster.counts <- as(cluster.counts,"matrix")
+
+library(edgeR)
+# Set up DGE
+y.ab <- DGEList(cluster.counts)
+y.ab$samples$SampleID <- rownames(y.ab$samples)
+y.ab$samples$Condition <- unlist(lapply(strsplit(rownames(y.ab$samples),"_"),function(x) x[1]))
+y.ab$samples$Condition <- gsub("CTRL","0",y.ab$samples$Condition)
+y.ab$samples$Condition <- gsub("dG","",y.ab$samples$Condition)
+y.ab$samples$Condition <- as.numeric(y.ab$samples$Condition)
+
+y.ab <- calcNormFactors(y.ab)
+tab <- data.frame()
+for (ct in rownames(cluster.counts)) {
+    library(MASS)
+    library(sfsmisc)
+    y.ab$samples$Counts <- cpm(y.ab, log=TRUE)[ct,]
+    fit <- rlm(formula=Counts ~  Condition, data=y.ab$samples,maxit=100)
+    ftest <- f.robftest(fit,var="Condition")
+    tmp <- data.frame("CellTypes"=ct,
+		      "lfc"=fit$coefficients[length(fit$coefficient)],
+		      "intercept"=fit$coefficients[1],
+		      "PVal"=ftest$p.value)
+    tab <- rbind(tab,tmp)
+}
+
+tab$FDR <- p.adjust(tab$PVal, method="BH")
+tab[order(tab$FDR,decreasing=FALSE),]
+
+addCol <- data.frame("CellTypes"=levels(pD$CellTypes),
+		     "Colors"=levels(pD$Colors))
+rownames(addCol) <- addCol$CellTypes
+addCol <- addCol[tab$CellTypes,]
+tab$Colors <- addCol$Colors
+tab$Colors <- factor(tab$Colors, levels=tab$Colors)
+tab$CellTypes <- factor(tab$CellTypes, levels=tab$CellTypes)
+library(ggrepel)
+volc <- ggplot(tab, aes(x=lfc, y=-log10(FDR),fill=CellTypes)) +
+    geom_point(pch=21,size=4) +
+    geom_hline(yintercept=1) +
+    geom_label_repel(data=tab[tab$FDR<0.1,], label=tab[tab$FDR<0.1,"CellTypes"],aes(fill=NULL)) +
+    scale_fill_manual(values=levels(tab$Colors)) +
+    theme(legend.position="none") 
+volc
+
+tab.preg <- tab
+```
+
+## Tumor vs Pregnancy
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+comp <- tab.preg[,c("CellTypes","Colors","lfc","FDR")]
+colnames(comp)[3-4] <- paste0(colnames(comp)[3-4],".Pregnancy")
+add <- tab.tum[,c("CellTypes","lfc","FDR")]
+colnames(add)[2-3] <- paste0(colnames(add)[2-3],".Tumor")
+comp <- dplyr::full_join(comp,add)
+comp$significant <- "None"
+comp$significant[comp$FDR.Tumor < 0.1] <- "Tumorigenesis"
+comp$significant[comp$FDR.Pregnancy < 0.1] <- "Pregnancy"
+comp$significant[comp$FDR.Pregnancy < 0.1 & comp$FDR.Tumor < 0.1] <- "Both"
+
+comp$lfc.Tumor[is.na(comp$lfc.Tumor)] <- 0
+comp$FDR.Tumor[is.na(comp$FDR.Tumor)] <- 1
+comp$lfc.Pregnancy[is.na(comp$lfc.Pregnancy)] <- 0
+comp$FDR.Pregnancy[is.na(comp$FDR.Pregnancy)] <- 1
+
+comp$lfc.Tumor[comp$lfc.Tumor>0] <- (comp$lfc.Tumor[comp$lfc.Tumor>0])/max(comp$lfc.Tumor[comp$lfc.Tumor>0])
+comp$lfc.Tumor[comp$lfc.Tumor<0] <- -(-comp$lfc.Tumor[comp$lfc.Tumor<0])/max(-comp$lfc.Tumor[comp$lfc.Tumor<0])
+comp$lfc.Pregnancy[comp$lfc.Pregnancy>0] <- (comp$lfc.Pregnancy[comp$lfc.Pregnancy>0])/max(comp$lfc.Pregnancy[comp$lfc.Pregnancy>0])
+comp$lfc.Pregnancy[comp$lfc.Pregnancy<0] <- -(-comp$lfc.Pregnancy[comp$lfc.Pregnancy<0])/max(-comp$lfc.Pregnancy[comp$lfc.Pregnancy<0])
+# 
+# comp$lfc.Tumor <- scale(comp$lfc.Tumor)
+# comp$lfc.Pregnancy <- scale(comp$lfc.Pregnancy)
+
+
+comp$significant <- factor(comp$significant,levels=c("None","Both","Pregnancy","Tumorigenesis"))
+
+ggplot(comp, aes(x=lfc.Pregnancy, y=lfc.Tumor, color=significant)) +
+    geom_point(size=2) + 
+    geom_label_repel(data=comp[comp$significant!="None",],aes(label=CellTypes)) +
+    geom_abline(slope=1,intercept=0) +
+    geom_vline(xintercept=0,lty="dashed") +
+    geom_hline(yintercept=0,lty="dashed") +
+    xlab("Scaled LFC during Pregnancy") +
+    ylab("Scaled LFC during Tumorigenesis") +
+    scale_color_manual(values=c("grey80","black","dodgerblue","red")) +
+    coord_fixed(1)
+```

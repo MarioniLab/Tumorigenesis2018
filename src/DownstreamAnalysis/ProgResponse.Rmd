@@ -1,0 +1,406 @@
+---
+title: "RANK signaling"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(Matrix)
+library(umap)
+library(dplyr)
+library(viridis)
+library(ggrastr)
+library(pheatmap)
+library(ggrepel)
+source("../functions.R")
+theme_set(theme_cowplot())
+
+sce.full <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
+rmgenes <- rownames(rD)[!rD$KeepForHvg]
+rmgenes <- rownames(sce.full)[rownames(sce.full) %in% rmgenes]
+
+dirtyPlot <- function(fplot){
+    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
+    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
+    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
+    sub.gse %>%
+	mutate(hitsPerc=(Significant/sum(fplot$fFDR==0.001))*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() 
+}
+outdr <- "../../data/figures/Figure3/"
+```
+
+# Hormone sensing cells response
+```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","9.5dG") & sce.full$CellTypesFinal=="Hs"]
+# I remove Csn2, Csn1s1, Csn1s2a, this is background mRNA
+bkgrnd <- c("Csn2","Csn1s1","Csn1s2a")
+sce.sub <- sce.sub[!rownames(sce.sub) %in% bkgrnd,]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+table(sce.sub$Sample)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("Sample")])
+library(edgeR)
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+y$samples$Condition <- y$samples$Condition
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+summary(decideTests(res))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+library(ggrepel)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.01,], size=.9)+
+    geom_label_repel(data=top[top$logFC>5 & top$FDR < 0.01,], aes(label=Gene)) +
+    geom_hline(yintercept=2) +
+    ggtitle("DE w time")
+
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
+#dirtyPlot(top) + ggtitle("Up with time")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+#dirtyPlot(top) + ggtitle("Down with time")
+```
+
+```{r,, warning=FALSE, message=FALSE}
+sce <- sce.full[,sce.full$CellTypesFinal=="Hs"]
+pD <- droplevels(data.frame(colData(sce)))
+gois <- top[top$logFC>2 & top$FDR <0.01,]
+gois <- gois[1:100,"Gene"]
+
+pD$Expr <- colSums(logcounts(sce)[gois,])
+pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
+ggplot(pD.p, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Pregnancy_HS_Response.pdf"),width=3,height=3)
+
+pD.t <- droplevels(pD[pD$Experiment=="Tumorigenesis" & pD$Condition!="5",])
+ggplot(pD.t, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Tumorigenesis_HS_Response.pdf"),width=3,height=3)
+
+pD <- pD[pD$Condition!="5",]
+
+
+
+library(RColorBrewer)
+cols.t <- brewer.pal(n=6,"PuRd")
+cols.p <- brewer.pal(n=5,"GnBu")
+cols <- c(cols.p[2],cols.p[2],cols.p[3:5],cols.t[2:5])
+pD$Condition <- factor(pD$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
+					      "1","2","3","4"))
+ggplot(pD, aes(x=Condition, y=Expr,fill=Condition)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1),
+	  legend.position="none") +
+    scale_fill_manual(values=cols) +
+    ylim(c(0,70)) +
+    xlab("") +
+    ylab("")  
+
+ggsave(paste0(outdr,"All_HS_Response.pdf"),width=2.9,height=2.9)
+
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","4.5dG", "9.5dG", "14.5dG") &
+			      sce.full$CellTypesFinal=="Hs"]
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+mtx <- logcounts(smrzd)
+ordr <- c("CTRL_1","CTRL_2","CTRL_3",
+	  "4.5dG_1","4.5dG_2","4.5dG_3",
+	  "9.5dG_1","9.5dG_2","9.5dG_3",
+	  "14.5dG_1","14.5dG_2","14.5dG_3")
+mtx <- mtx[gois,ordr]
+mtx <- mtx/rowMax(mtx)
+
+dev.off()
+cairo_pdf(paste0(outdr,"HS_Heatmap.pdf"))
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_rownames=FALSE,
+	 show_colnames=FALSE,
+#	 gaps_col=c(3,6,9),
+	 fontsize=8,
+	 legend=FALSE
+	 )
+
+dev.off()
+```
+
+```{r,, warning=FALSE, message=FALSE}
+sce <- sce.full[,sce.full$CellTypesFinal=="Hs"]
+pD <- droplevels(data.frame(colData(sce)))
+
+pD$Calca <- logcounts(sce)["Calca",]
+pD$Rankl <- logcounts(sce)["Tnfsf11",]
+pD$Igf2 <- logcounts(sce)["Igf2",]
+pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
+pD.p <- pD.p[,c("Condition","Calca","Rankl","Igf2")]
+fplot <- reshape2::melt(pD.p)
+
+ggplot(fplot, aes(x=Condition, y=value)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    facet_wrap(~variable,nrow=3,scales="free_y") +
+    theme(strip.text.x = element_blank() ,
+          strip.text.y = element_blank(),
+          strip.background = element_blank()) +
+    xlab("") +
+    ylab("")
+
+ggsave(paste0(outdr,"HSPregnancy.pdf"),width=1.98,height=4.57)
+```
+
+# Basal Cells
+```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","14.5dG") & sce.full$CellTypesFinal %in% c("Bsl1","Bsl2","BslG")]
+# I remove Csn2, Csn1s1, Csn1s2a, this is background mRNA
+bkgrnd <- c("Csn2","Csn1s1","Csn1s2a")
+sce.sub <- sce.sub[!rownames(sce.sub) %in% bkgrnd,]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+table(sce.sub$Sample)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("Sample")])
+library(edgeR)
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+y$samples$Condition <- y$samples$Condition
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+summary(decideTests(res))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+library(ggrepel)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.01,], size=.9)+
+    geom_label_repel(data=top[top$FDR < 0.01,][1:20,], aes(label=Gene)) +
+    geom_hline(yintercept=2) +
+    ggtitle("DE w time")
+
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
+#dirtyPlot(top) + ggtitle("Up with time")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+#dirtyPlot(top) + ggtitle("Down with time")
+```
+
+```{r,, warning=FALSE, message=FALSE}
+sce <- sce.full[,sce.full$CellTypesFinal %in% c("Bsl1","Bsl2","BslG")]
+pD <- droplevels(data.frame(colData(sce)))
+gois <- top[top$logFC>2 & top$FDR <0.01,]
+gois <- gois[1:100,"Gene"]
+
+pD$Expr <- colSums(logcounts(sce)[gois,])
+pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
+ggplot(pD.p, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Pregnancy_Basal_Response.pdf"),width=3,height=3)
+
+pD.t <- droplevels(pD[pD$Experiment=="Tumorigenesis" & pD$Condition!="5",])
+ggplot(pD.t, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Tumorigenesis_Basal_Response.pdf"),width=3,height=3)
+
+pD <- pD[pD$Condition!="5",]
+pD$Condition <- factor(pD$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
+					      "1","2","3","4"))
+ggplot(pD, aes(x=Condition, y=Expr,fill=Condition)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1),
+	  legend.position="none") +
+    scale_fill_manual(values=cols) +
+    ylim(c(0,70)) +
+    xlab("") +
+    ylab("")  
+ggsave(paste0(outdr,"All_Basal_Response.pdf"),width=2.9,height=2.9)
+
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","4.5dG", "9.5dG", "14.5dG") &
+			      sce.full$CellTypesFinal %in% c("Bsl1","Bsl2","BslG")]
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+mtx <- logcounts(smrzd)
+ordr <- c("CTRL_1","CTRL_2","CTRL_3",
+	  "4.5dG_2","4.5dG_3","4.5dG_1",
+	  "9.5dG_1","9.5dG_2","9.5dG_3",
+	  "14.5dG_1","14.5dG_2","14.5dG_3")
+mtx <- mtx[gois,ordr]
+mtx <- mtx/rowMax(mtx)
+
+dev.off()
+cairo_pdf(paste0(outdr,"Basal_Heatmap.pdf"))
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_rownames=FALSE,
+	 show_colnames=FALSE,
+#	 gaps_col=c(3,6,9),
+	 fontsize=8,
+	 legend=FALSE
+	 )
+
+dev.off()
+```
+
+# LP Response 
+```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","14.5dG") & sce.full$CellTypesFinal %in% c("Lp","Avd")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+table(sce.sub$Sample)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("Sample")])
+library(edgeR)
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+y$samples$Condition <- y$samples$Condition
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+summary(decideTests(res))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+library(ggrepel)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.01,], size=.9)+
+    geom_label_repel(data=top[top$FDR < 0.01,][1:20,], aes(label=Gene)) +
+    geom_hline(yintercept=2) +
+    ggtitle("DE w time")
+
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
+#dirtyPlot(top) + ggtitle("Up with time")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+#dirtyPlot(top) + ggtitle("Down with time")
+```
+
+```{r,, warning=FALSE, message=FALSE}
+sce <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
+pD <- droplevels(data.frame(colData(sce)))
+gois <- top[top$logFC>2 & top$FDR <0.01,]
+gois <- gois[1:100,"Gene"]
+
+pD$Expr <- colSums(logcounts(sce)[gois,])
+pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
+ggplot(pD.p, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Pregnancy_Lp_Response.pdf"),width=3,height=3)
+
+pD.t <- droplevels(pD[pD$Experiment=="Tumorigenesis" & pD$Condition!="5",])
+ggplot(pD.t, aes(x=Condition, y=Expr)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1)) +
+    ylim(c(0,70))
+ggsave(paste0(outdr,"Tumorigenesis_Lp_Response.pdf"),width=3,height=3)
+
+pD <- pD[pD$Condition!="5",]
+pD$Condition <- factor(pD$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
+					      "1","2","3","4"))
+ggplot(pD, aes(x=Condition, y=Expr,fill=Condition)) +
+    geom_violin(scale="width", draw_quantiles=0.5) +
+    theme(axis.text.x=element_text(angle=45,hjust=1),
+	  legend.position="none") +
+    scale_fill_manual(values=cols) +
+    ylim(c(0,70)) +
+    xlab("") +
+    ylab("")  
+ggsave(paste0(outdr,"All_Lp_Response.pdf"),width=2.9,height=2.9)
+sce.sub <- sce.full[,sce.full$Condition %in% c("WTYoung","4.5dG", "9.5dG", "14.5dG") &
+			      sce.full$CellTypesFinal %in% c("Lp","Avd")]
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+mtx <- logcounts(smrzd)
+ordr <- c("CTRL_1","CTRL_2","CTRL_3",
+	  "4.5dG_2","4.5dG_3","4.5dG_1",
+	  "9.5dG_1","9.5dG_2","9.5dG_3",
+	  "14.5dG_1","14.5dG_2","14.5dG_3")
+mtx <- mtx[gois,ordr]
+mtx <- mtx/rowMax(mtx)
+
+dev.off() 
+
+cairo_pdf(paste0(outdr,"LP_Heatmap.pdf"))
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 show_rownames=FALSE,
+	 show_colnames=FALSE,
+#	 gaps_col=c(3,6,9),
+	 fontsize=8,
+	 legend=FALSE
+	 )
+
+dev.off()
+
+```
