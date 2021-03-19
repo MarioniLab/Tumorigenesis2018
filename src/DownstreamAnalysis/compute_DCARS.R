@@ -10,7 +10,7 @@ sce.full$CellTypes <- factor(sce.full$CellTypesFinal)
 sce.full$Colors <- factor(sce.full$Colors)
 sce.full$Batch <- as.character(sce.full$Batch)
 sce.full$Groups <- factor(sce.full$Groups)
-fkingp53_andtm <- c("WKBR76.5c","WKBR76.5f")
+p53s <- c("WKBR76.5c","WKBR76.5f")
 
 ptime <- read.csv("../../data/Integrated/Robjects/TumorTime.csv")[,-1]
 
@@ -19,7 +19,7 @@ pD <- dplyr::left_join(pD,ptime)
 pD <- droplevels(pD)
 colData(sce.full) <- DataFrame(pD)
 
-sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial" & !(sce.full$Condition %in% fkingp53_andtm)]
+sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial" & !(sce.full$Condition %in% p53s)]
 
 sce.full$Condition[grepl("WKBR",sce.full$Condition)] <- sce.full$ptimeBin[grepl("WKBR",sce.full$Condition)]
 sce.full$Condition[grepl("CTRL",sce.full$Condition)] <- "WTYoung"
@@ -32,54 +32,19 @@ rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
 rmgenes <- rownames(rD)[!rD$KeepForHvg]
 rmgenes <- rownames(sce)[rownames(sce) %in% rmgenes]
 
-# sce.lp <- sce.full[,sce.full$CellTypes %in% c("Lp","Avd") & sce.full$Condition!="WTOld"]
-# cd <- data.frame(colData(sce.lp))
-# cd <- droplevels(cd)
-# colData(sce.lp) <- DataFrame(cd)
-# dcars <- TwoSampleDCARS(sce.lp,
-#                         assay="logcounts",
-#                         PPI="Csn2",
-#                         twoSample="Experiment",
-#                         twoSampleRefLevel="Pregnancy",
-#                         split=NULL,
-#                         cor_method="spearman",
-#                         minNonZeroSamples=10,
-#                         niter=1000,
-#                         ncores=4,
-#                         parallel=TRUE)
-# dcars <- saveRDS(dcars,"../../data/Downstream/DCARS_OUT.rds")
-
-# The same for Lp Only
-sce.lp <- sce.full[,sce.full$CellTypes %in% c("Lp") & sce.full$Condition!="WTOld"]
+sce.lp <- sce.full[,sce.full$CellTypes %in% c("Lp","Avd") & sce.full$Condition!="WTOld"]
 cd <- data.frame(colData(sce.lp))
 cd <- droplevels(cd)
 colData(sce.lp) <- DataFrame(cd)
 dcars <- TwoSampleDCARS(sce.lp,
-			assay="logcounts",
-			PPI="Csn2",
-			twoSample="Experiment",
-			twoSampleRefLevel="Pregnancy",
-			split=NULL,
-			cor_method="spearman",
-			minNonZeroSamples=10,
-			niter=1000,
-			ncores=4,
-			parallel=TRUE)
-saveRDS(dcars,"../../data/Downstream/DCARS_OUT_LpOnly.rds")
-
- sce.lp <- sce.full[,sce.full$CellTypes %in% c("Lp","Avd") & sce.full$Condition!="WTOld"]
- cd <- data.frame(colData(sce.lp))
- cd <- droplevels(cd)
- colData(sce.lp) <- DataFrame(cd)
- dcars <- TwoSampleDCARS(sce.lp,
-                         assay="logcounts",
-                         PPI="Cebpb",
-                         twoSample="Experiment",
-                         twoSampleRefLevel="Pregnancy",
-                         split=NULL,
-                        cor_method="spearman",
-                         minNonZeroSamples=10,
-                         niter=1000,
-                         ncores=4,
-                         parallel=TRUE)
+		     assay="logcounts",
+		     PPI="Cebpb",
+		     twoSample="Experiment",
+		     twoSampleRefLevel="Pregnancy",
+		     split=NULL,
+		    cor_method="spearman",
+		     minNonZeroSamples=10,
+		     niter=1000,
+		     ncores=4,
+		     parallel=TRUE)
  saveRDS(dcars,"../../data/Downstream/DCARS_OUT_Cebpb.rds")

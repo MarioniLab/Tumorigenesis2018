@@ -13,27 +13,6 @@ output:
 ---
 ***
 
-# Main messages
-
-In this file I will produce all the figure files for F1.
-
-__Experimental setup of Tumorigenesis experiment__
-
-- There is a need to understand pre-cancerous changes
-- Sampling animals from a TNBC model pre-tumor formation and performing scRNAseq
-
-__Inferring biological time__
-
-- Age does not capture disease progression
-- Inference of tumor time and grouping into stages
-
-__Compositional changes during tumor development__
-
-- Facetted UMAP as Overview
-- Possible Ribbonplot / Barplot
-I will keep the code and the plots for all of this in this document.
-Including some further discussions.
-
 ```{r, message=FALSE,warning=FALSE}
 library(scran)
 library(scater)

@@ -43,25 +43,6 @@ outdr <- "../../data/figures/Figure3/"
 
 ## Alveolar expression
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
-#fplot <- data.frame(colData(sce[,sce$CellTypesFinal=="Avd"]))
-
-fplot <- data.frame()
-genes <- c("Epcam","Krt8","Krt18","Csn2","Csn1s1","Glycam1","Wap","Lalba")
-sce.av <- sce[,sce$CellTypesFinal=="Avd"]
-
-for (gene in genes) {
-    tmp <- data.frame("Expression"=logcounts(sce.av)[gene,],
-		      "Gene"=gene)
-    fplot <- rbind(fplot,tmp)
-}
-
-ggplot(fplot, aes(x=Gene,y=Expression)) +
-    geom_jitter(size=.3,color="grey80") +
-    stat_summary(fun = median, fun.min = median, fun.max = median,
-                 geom = "crossbar", width = 0.5) +
-    xlab("")
-
-# Version 2
 fplot <- data.frame()
 genes <- c("Epcam","Krt8","Krt5","Krt17",
 	   "Csn2","Csn1s1","Wap","Lalba",
