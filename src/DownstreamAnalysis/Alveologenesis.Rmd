@@ -15,7 +15,6 @@ output:
 
 In this script I will put anything that is related to alveologenesis in the tumorigenesis and pregnancy dataset.
 ```{r, message=FALSE,warning=FALSE}
-library(slingshot)
 library(scran)
 library(scater)
 library(ggplot2)
@@ -25,6 +24,7 @@ library(umap)
 library(dplyr)
 library(viridis)
 library(ggrastr)
+library(pheatmap)
 source("../functions.R")
 theme_set(theme_cowplot())
 
@@ -98,14 +98,13 @@ ggplot(fplot, aes(x=Gene,y=Expression)) +
     ylab("Expression") +
     xlab("")
 
-ggsave(paste0(outdr,"Avd_Expression.pdf"))
+ggsave(paste0(outdr,"Avd_Expression.png"),dpi=800)
 ```
 
 ```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
 sce.av <- sce[,sce$CellTypesFinal %in% c("Lp","Avd")]
-sce.av <- sce.av[,!sce.av$Condition %in% c("5","WTOld")]
+sce.av <- sce.av[,!sce.av$Condition %in% c("5")]
 sce.av <- sce.av[,sce.av$UMAP1 > -2.5] # removing a single cell that is sitting somewhere else
-pD <- droplevels(data.frame(colData(sce.av)))
 
 dpi <- 300
 
@@ -120,8 +119,38 @@ pltUMAP <- function(pD.sub,pD) {
     return(p)
 }
 
+# Animation
+
+library(gganimate)
+pD.ani <- droplevels(data.frame(colData(sce.av)))
+pD.ani$ptimeBin[is.na(pD.ani$ptimeBin)] <- 0
+pD.ani$ptimeBin <- factor(pD.ani$ptimeBin)
+levels(pD.ani$ptimeBin) <- c("Wildtype","Pre-malignant stage 1","Pre-malignant stage 2","Pre-malignant stage 3","Pre-malignant stage 4")
+
+p <- ggplot(pD.ani, aes(x=UMAP1, y=UMAP2, fill=CellTypesFinal)) +
+    geom_point(data=pD.ani[,c("UMAP1","UMAP2")],color="grey80",size=3,fill="grey80") +
+    geom_point(aes(group=CellTypesFinal),size=3,pch=21) +
+    #     geom_density_2d(color="black") +
+    transition_states(ptimeBin,
+		      transition_length=1,
+#		      transition_length=2,
+		      state_length=3,
+		      wrap=FALSE) +
+    labs(title = '{closest_state}') +
+    scale_fill_manual(values=levels(pD.ani$Colors)) +
+    enter_fade() +
+    exit_fade() +
+    ease_aes("cubic-in-out") +
+    theme_void() +
+    theme(legend.position="none",
+	  plot.title=element_text(size=18,face="bold"))
+
+p.anim <- animate(p)
+anim_save("fancyUMAP_LPs.gif",animation=p.anim)
 
 # One with everything
+sce.av <- sce.av[,!sce.av$Condition %in% c("WTOld")]
+pD <- droplevels(data.frame(colData(sce.av)))
 
 p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     geom_point(aes(fill=CellTypesFinal), size=2.1,pch=21,stroke=.1) +
@@ -160,7 +189,7 @@ library(schex)
 sce.av <- make_hexbin(sce.av, nbins = 50, 
 		   dimension_reduction = "UMAP", use_dims=c(1,2))
 pltGEX <- function(sce, gene) {
-    plot_hexbin_gene(sce, gene=gene, type="logcounts",
+    plot_hexbin_feature(sce, feature=gene, type="logcounts",
 		     action="mean") +
 	theme_void() +
 	theme(legend.position="none") +
@@ -183,6 +212,14 @@ sumry <- group_by(pD, ptimeBin, CellTypesFinal) %>%
     summarize(n=n()) %>%
     mutate(frac=n/sum(n)) %>%
     ungroup()
+
+sumry2 <- group_by(pD, ptimeBin, SampleID, CellTypesFinal) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup() %>%
+    group_by(ptimeBin, CellTypesFinal) %>%
+    summarize(mean_frac=mean(frac),
+	      sd_frac=sd(frac))
 
 comb <- table(sumry$CellTypesFinal,sumry$ptimeBin) 
 missing.comb <- which(comb==0, arr.ind=TRUE)
@@ -383,6 +420,9 @@ hx.t <- plot_hexbin_meta(sce.t, col="Condition", action="majority") +
 
 ggsave(paste0(outdr,"UMAP_Tumor_Epithelium_Bins_SS.pdf"),hx.t)
 
+xlims <- ggplot_build(hx.t)$layout$panel_scales_x[[1]]$range$range
+ylims <- ggplot_build(hx.t)$layout$panel_scales_y[[1]]$range$range
+
 cols.p <- brewer.pal(n=5,"GnBu")
 hx.p <- plot_hexbin_meta(sce.p, col="Condition", action="majority") +
     scale_fill_manual(values=cols.p[2:5]) +
@@ -390,6 +430,8 @@ hx.p <- plot_hexbin_meta(sce.p, col="Condition", action="majority") +
     theme(text=element_text(size=14)) +
     theme(legend.position="left",
 	  legend.title=element_blank()) +
+    xlim(xlims) +
+    ylim(ylims) +
     ggtitle("")
 
 ggsave(paste0(outdr,"UMAP_Pregnancy_Epithelium_Bins_SS.pdf"),hx.p)
@@ -450,4 +492,31 @@ bubblePlot(logcounts(sce.full), genes, sce.full$CellTypesFinal ,angled=TRUE) +
     scale_color_gradient2(low="white",high=hi) +
     theme(axis.text=element_text(size=10))
 ggsave(paste0(outdr,"GEX_selected_Heatmap_vertical.pdf"),height=6,width=3)
+
+
+smrzd <- aggregateAcrossCells(sce.full,ids=as.character(sce.full$CellTypesFinal),
+			      use_exprs_values="logcounts",
+			      average=TRUE)
+
+genes <- c("Epcam","Krt8","Krt18","Elf5","Csn2","Csn1s1","Glycam1","Lalba","Wap",
+	   "Esr1","Cited1","Pgr","Prlr","Ly6a","Aldh1a3","Kit","Cd14",
+	   "Krt9","Acta2","Krt14",
+	   "Cxcl14","Sfn","Socs3","Egr2","Gas1","Actg2","Col4a1","Adamts18","Asz1","Skap1","Oas2","Lgals3bp")
+ordr <- c("Avd","Hs","Hsp","Lp","LpBsl","Bsl1","Bsl2","BslG","Tm")
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+colnames(mtx) <- renameForPlot(colnames(mtx))
+cairo_pdf(paste0(outdr,"GEX_selceted_Heatmap.pdf"),width=3,height=6)
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+#	 gaps_col=c(9,19,26,40),
+	 fontsize=12
+	 )
+ dev.off()
+
+
+
 ```

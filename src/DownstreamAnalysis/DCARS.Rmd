@@ -129,8 +129,8 @@ for (gene in genes) {
     cor1 <- sprintf("rho == %0.2f", cor1)
     cor2 <- dcars[paste0("Csn2_",gene),"cors_second_obs"]
     cor2 <- sprintf("rho == %0.2f", cor2)
-    dmy <- data.frame(Csn2Expr=c(1.5,1.5),
-		      Expr=c(max(cd$Expr)+.01,max(cd$Expr)+.01),
+    dmy <- data.frame(Csn2Expr=c(2.2,2.2),
+		      Expr=c(max(cd$Expr)-0.05,max(cd$Expr)-0.05),
 		      Experiment=c("Pregnancy","Tumorigenesis"),
 		      Correlation=c(cor1,cor2))
 
@@ -148,10 +148,10 @@ for (gene in genes) {
 	geom_point(size=.9, color="black") +
 	geom_density_2d(color="grey95",lty="dashed",h=bws*6,lwd=1.2) +
 	facet_wrap(~Experiment) +
-        geom_smooth(method="lm",color="grey95",lwd=.8) +
-	geom_text(data=dmy,aes(label=Correlation),size=7,fontface="bold",parse=TRUE) +
+        geom_smooth(method="lm",color="grey95",lwd=2.0) +
+	geom_text(data=dmy,aes(label=Correlation),size=9,fontface="bold",parse=TRUE) +
 	theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
-	      axis.text=element_text(size=14),
+	      axis.text=element_text(size=20),
 	      axis.title=element_text(size=16,face="bold"),
 	      #               strip.text.x = element_text(size=12, face="bold") ,
 	      #               strip.text.y = element_text(size=12, face="bold"),
@@ -208,11 +208,11 @@ fplot.sig <- fplot[fplot$normFDR<0.001 & abs(fplot$dist_med)>0.3,]
 genes <- c(fplot.sig[order(fplot.sig$dist_med),][1:10,"Gene"],fplot.sig[order(-fplot.sig$dist_med),][1:10,"Gene"])
 genes <- c(genes,"Cebpb","Olah","Glycam1")
 ggplot(fplot.sig, aes(x=first_dist_to_med, y=second_dist_to_med)) +
-    geom_point(data=fplot[,c("first_dist_to_med", "second_dist_to_med")], size=.1, color="grey30") +
-    geom_point() +
+    geom_point_rast(data=fplot[,c("first_dist_to_med", "second_dist_to_med")], size=.1, color="grey30",dpi=400) +
+    geom_point_rast(dpi=400) +
     geom_hline(yintercept=0, lty="dashed", size=1.2) +
     geom_vline(xintercept=0, lty="dashed", size=1.2) +
-    geom_label_repel(data=fplot.sig[fplot.sig$Gene %in% genes,], aes(label=Gene),size=6) +
+    geom_text_repel(data=fplot.sig[fplot.sig$Gene %in% genes,], aes(label=Gene),size=6) +
     geom_abline(slope=1, lty="dashed",size=1.2, color="grey50") +
     xlab("Distance from median Csn2 correlation in Pregnancy") +
     ylab("Distance from median Csn2 Correlation in Tumorigenesis") +
@@ -221,11 +221,32 @@ ggplot(fplot.sig, aes(x=first_dist_to_med, y=second_dist_to_med)) +
     coord_fixed(1) +
     theme(axis.line=element_line(size=1.5),
 	  axis.ticks=element_line(size=1.5),
-	  axis.text=element_text(size=14),
+	  axis.text=element_text(size=20),
 	  axis.title=element_text(size=16))
-ggsave("../../data/figures/Figure3/DCARS.pdf")
+ggsave("../../data/figures/Figure3/DCARS.pdf",dpi=400)
 
 
+# Out for thesis -.-
+out <- fplot.sig
+out <- out[,c("Gene","cors_first_obs","nonzero_cortest_first_pval",
+	      "cors_second_obs","nonzero_cortest_second_pval",
+	      "corsdiff_obs","first_dist_to_med","second_dist_to_med",
+	      "dist_med","normFDR")]
+out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval",
+       "normFDR")] <- -log10(out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")])
+out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")][out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")]==Inf] <- 300
+out[,-1] <- round(out[,-1],2)
+colnames(out) <- c("Gene", "Cor. in #1",
+		   "P Value in #1",
+		   "Cor. in #2",
+		   "P Value in #2",
+		   "Difference in Cor.",
+		   "Distance to median Cor. #1",
+		   "Distance to median Cor. #2",
+		   "Difference in median Cor.",
+		   "FDR")
+
+write.csv(out,"../../data/figures/Figure3/DC_Genes.csv")
 
 #Second interesting opposed cor in pregnancy
 #Int1 is included in int2

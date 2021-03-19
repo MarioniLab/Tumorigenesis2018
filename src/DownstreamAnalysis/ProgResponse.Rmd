@@ -84,13 +84,18 @@ summary(decideTests(res))
 
 top <- topTags(res,n=nrow(y))$table
 top$Gene <- rownames(top)
+gois <- c(top[top$logFC>2 & top$FDR <0.01,"Gene"][1:20],top[top$logFC < -2 & top$FDR <0.01,"Gene"][1:20])
+
 library(ggrepel)
+library(ggrastr)
 ggplot(top, aes(x=logFC, y=-log10(FDR))) +
-    geom_point(size=.5,color="grey80") +
-    geom_point(data=top[top$FDR<0.01,], size=.9)+
-    geom_label_repel(data=top[top$logFC>5 & top$FDR < 0.01,], aes(label=Gene)) +
+    geom_point_rast(size=.5,color="grey80",dpi=400) +
+    geom_point_rast(data=top[top$FDR<0.01,], size=.9,dpi=400)+
+    geom_text_repel(data=top[gois,], aes(label=Gene),size=6) +
     geom_hline(yintercept=2) +
-    ggtitle("DE w time")
+    theme_pub() 
+
+ggsave(paste0(outdr,"Pregnancy_HS_Response_Volcano.pdf"),dpi=400)
 
 top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
 #dirtyPlot(top) + ggtitle("Up with time")
@@ -103,7 +108,7 @@ sce <- sce.full[,sce.full$CellTypesFinal=="Hs"]
 pD <- droplevels(data.frame(colData(sce)))
 gois <- top[top$logFC>2 & top$FDR <0.01,]
 gois <- gois[1:100,"Gene"]
-
+gois.hs <- gois
 pD$Expr <- colSums(logcounts(sce)[gois,])
 pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
 ggplot(pD.p, aes(x=Condition, y=Expr)) +
@@ -222,13 +227,18 @@ summary(decideTests(res))
 
 top <- topTags(res,n=nrow(y))$table
 top$Gene <- rownames(top)
+gois <- c(top[top$logFC>2 & top$FDR <0.01,"Gene"][1:20],top[top$logFC < -2 & top$FDR <0.01,"Gene"][1:20])
+
 library(ggrepel)
+library(ggrastr)
 ggplot(top, aes(x=logFC, y=-log10(FDR))) +
-    geom_point(size=.5,color="grey80") +
-    geom_point(data=top[top$FDR<0.01,], size=.9)+
-    geom_label_repel(data=top[top$FDR < 0.01,][1:20,], aes(label=Gene)) +
+    geom_point_rast(size=.5,color="grey80",dpi=400) +
+    geom_point_rast(data=top[top$FDR<0.01,], size=.9,dpi=400)+
+    geom_text_repel(data=top[gois,], aes(label=Gene),size=6) +
     geom_hline(yintercept=2) +
-    ggtitle("DE w time")
+    theme_pub() 
+
+ggsave(paste0(outdr,"Pregnancy_Basal_Response_Volcano.pdf"),dpi=400)
 
 top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
 #dirtyPlot(top) + ggtitle("Up with time")
@@ -241,6 +251,7 @@ sce <- sce.full[,sce.full$CellTypesFinal %in% c("Bsl1","Bsl2","BslG")]
 pD <- droplevels(data.frame(colData(sce)))
 gois <- top[top$logFC>2 & top$FDR <0.01,]
 gois <- gois[1:100,"Gene"]
+gois.bsl <- gois
 
 pD$Expr <- colSums(logcounts(sce)[gois,])
 pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
@@ -325,13 +336,18 @@ summary(decideTests(res))
 
 top <- topTags(res,n=nrow(y))$table
 top$Gene <- rownames(top)
+gois <- c(top[top$logFC>2 & top$FDR <0.01,"Gene"][1:20],top[top$logFC < -2 & top$FDR <0.01,"Gene"][1:20])
+
 library(ggrepel)
+library(ggrastr)
 ggplot(top, aes(x=logFC, y=-log10(FDR))) +
-    geom_point(size=.5,color="grey80") +
-    geom_point(data=top[top$FDR<0.01,], size=.9)+
-    geom_label_repel(data=top[top$FDR < 0.01,][1:20,], aes(label=Gene)) +
+    geom_point_rast(size=.5,color="grey80",dpi=400) +
+    geom_point_rast(data=top[top$FDR<0.01,], size=.9,dpi=400)+
+    geom_text_repel(data=top[gois,], aes(label=Gene),size=6) +
     geom_hline(yintercept=2) +
-    ggtitle("DE w time")
+    theme_pub() 
+
+ggsave(paste0(outdr,"Pregnancy_Lp_Response_Volcano.pdf"),dpi=400)
 
 top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>1,0.001,1)
 #dirtyPlot(top) + ggtitle("Up with time")
@@ -344,6 +360,7 @@ sce <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
 pD <- droplevels(data.frame(colData(sce)))
 gois <- top[top$logFC>2 & top$FDR <0.01,]
 gois <- gois[1:100,"Gene"]
+gois.lp <- gois
 
 pD$Expr <- colSums(logcounts(sce)[gois,])
 pD.p <- droplevels(pD[pD$Experiment=="Pregnancy",])
@@ -403,4 +420,12 @@ pheatmap(mtx,
 
 dev.off()
 
+gois.hs <- paste0(gois.hs,collapse=", ")
+gois.bsl <- paste0(gois.bsl,collapse=", ")
+gois.lp <- paste0(gois.lp,collapse=", ")
+out <- data.frame("Signature"=c("Hormone-sensing cells",
+				"Basal cells",
+				"Luminal progenitors"),
+		  "Top 100 Genes"=c(gois.hs,gois.bsl,gois.lp))
+write.csv(out,"GeneSigs.csv")
 ```

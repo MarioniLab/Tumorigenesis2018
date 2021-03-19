@@ -74,8 +74,8 @@ barplt <- ggplot(sumry, aes(x=Condition, y=frac*100, fill=CellTypes)) +
     xlab("") +
     ylab("") +
     coord_flip() +
-    theme_pub() +
-    theme(legend.position="none") 
+    theme_pub() 
+#    theme(legend.position="none") 
 barplt
 
 ggsave(paste0(outdr,"Barplot_Tumor_all.pdf"))#,width=5,height=5)
@@ -141,7 +141,8 @@ volc <- ggplot(tab, aes(x=lfc, y=-log10(FDR),fill=CellTypes)) +
 volc
 
 tab.tum <- tab
-
+# Save for Shiny server
+write.csv(tab,"../../Shiny/data/TumourDA.csv")
 ggsave(paste0(outdr,"Volcano.pdf"),volc,width=7.6,height=6.6)
 ```
 

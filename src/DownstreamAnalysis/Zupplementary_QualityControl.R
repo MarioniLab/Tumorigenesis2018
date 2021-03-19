@@ -63,8 +63,8 @@ gds <- ggplot(pD, aes(x=SampleID, y=GenesDetected, fill=Condition)) +
 	  axis.text=element_text(size=14),
 	  strip.text.x = element_blank() ,
 	  strip.text.y = element_blank(),
-#	  axis.text.x=element_text(size=14,angle=90),
-	  axis.text.x=element_blank(),
+	  axis.text.x=element_text(size=14,angle=90),
+	  #           axis.text.x=element_blank(),
 	  axis.ticks.x=element_blank(),
 	  strip.background = element_rect(colour="black", fill="white"),
 	  legend.position="none") +
@@ -116,6 +116,8 @@ barplt <- ggplot(sumry, aes(x=SampleID, y=frac*100, fill=Groups)) +
     ylab("Percentage of Cells") 
 
 plot_grid(ncells,umis,gds,barplt,nrow=4,rel_heights=c(1,1,1,2))
+plot_grid(ncells,umis,gds,nrow=3,rel_heights=c(1,1,2))
+ggsave("../../data/figures/Supplementary/QualityMeasures.pdf",width=9.6,height=6.5)
 
 # Marker Genes
 smrzd <- aggregateAcrossCells(sce,ids=sce$CellTypesFinal,
@@ -190,10 +192,48 @@ mtx <- mtx[genes,ordr]
 library(viridis)
 library(pheatmap)
 colnames(mtx) <- renameForPlot(colnames(mtx))
-pheatmap(t(mtx),
+
+cairo_pdf("../../data/figures/Supplementary/GEX.pdf",height=11,width=6)
+pheatmap(mtx,
 	 color=inferno(n=100,begin=0,end=1),
 	 cluster_rows=FALSE,
 	 cluster_cols=FALSE,
-	 gaps_row=c(9,19,26,40),
-	 fontsize=8
+	 gaps_col=c(9,19,26,40),
+	 fontsize=7
 	 )
+dev.off()
+
+
+
+p <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point_rast(data=pD[,c("UMAP1","UMAP2")],size=.5,color="grey40",dpi=400) +
+    geom_point_rast(data=pD, size=1, aes(color=Condition),dpi=400) +
+    facet_wrap(~Condition,ncol=2) +
+    scale_color_brewer(palette="Paired") +
+    theme_void() +
+    theme(legend.position="none",
+	  strip.text=element_blank())
+
+ggsave("../../data/figures/Supplementary/UMAPSByCondition.png",height=12.5,width=5,dpi=400)
+
+    
+library(grid)
+library(gtable)
+
+g1 <-  ggplotGrob(p)
+
+#gtable_show_layout(g1)
+#grid.draw(g1[8,5])
+# Not sure if there is a point doing the rasterize and then do png anyways..
+
+frms <- list(c(8,5),c(8,9),
+	     c(13,5),c(13,9),
+	     c(18,5),c(18,9),
+	     c(23,5),c(23,9),
+	     c(28,5),c(28,9))
+
+for (i in seq_along(frms)) {
+    png(paste0("../../data/figures/Supplementary/UMAPS_",i,".png"),width=2048,height=2048,res=400)
+    grid.draw(g1[frms[[i]][1],frms[[i]][2]])
+    dev.off()
+}

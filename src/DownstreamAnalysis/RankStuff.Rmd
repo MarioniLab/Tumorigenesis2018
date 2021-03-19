@@ -63,15 +63,10 @@ sce.full$Colors <- factor(sce.full$Colors)
 sce.full$Batch <- as.character(sce.full$Batch)
 sce.full$Groups <- factor(sce.full$Groups)
 fkingp53_andtm <- c("WKBR76.5c","WKBR76.5f","WKBR61.4dTM","WKBR75.4bTM")
-sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial" & !(sce.full$Condition %in% fkingp53_andtm)]
+sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial" & !(sce.full$SampleID %in% fkingp53_andtm)]
 sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
-ptime <- read.csv("../../data/Integrated/Robjects/TumorTime.csv")[,-1]
 
-sce <- sce[,sce$Condition %in% ptime$Condition]
-pD <- data.frame(colData(sce))
-pD <- dplyr::left_join(pD,ptime)
-pD <- droplevels(pD)
-colData(sce) <- DataFrame(pD)
+pD <- droplevels(data.frame(colData(sce)))
 
 rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
 rmgenes <- rownames(rD)[!rD$KeepForHvg]
@@ -110,19 +105,18 @@ p0 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
     geom_point(size=.1,aes(color=CellTypesFinal)) +
     ggtitle("Tumorigenesis") +
     scale_color_manual(values=levels(pD$Colors)) +
-    facet_wrap(~ptimeBin,nrow=2) +
+    facet_wrap(~Condition,nrow=2) +
     theme(legend.position="none") +
     theme_void()
 
 sce.p <- sce.full[,sce.full$Experiment=="Pregnancy"]
 pD.p <- data.frame(colData(sce.p))
-pD.p$Condition <- factor(pD.p$Condition,levels=c("CTRL","4.5dG","9.5dG","14.5dG"))
 
 p1 <- ggplot(pD.p, aes(x=UMAP1, y=UMAP2)) +
     geom_point(data=pD.p[,c("UMAP1","UMAP2")], size=.1,color="grey80") +
     geom_point(size=.1,aes(color=CellTypesFinal)) +
     ggtitle("Pregnancy") +
-    scale_color_manual(values=levels(pD$Colors)) +
+    scale_color_manual(values=levels(pD.p$Colors)) +
     facet_wrap(~Condition,nrow=2) +
     theme(legend.position="none") +
     theme_void()
@@ -160,93 +154,13 @@ p3 <- plot_hexbin_gene(sce.p, gene="Tnfrsf11a", type="logcounts",
 plot_grid(p0,p1,p2,p3)
 ```
 
-```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
-#
-sce.sub <- sce.full[,sce.full$CellTypesFinal %in% c("Hs")]
-pD.sub <- data.frame(colData(sce.sub))
-pD.sub <- dplyr::left_join(pD.sub,ptime)
-
-pD.sub$Rankl <- logcounts(sce.sub)["Tnfsf11",]
-pD.sub.p <- pD.sub[pD.sub$Experiment=="Pregnancy",]
-pD.sub.p$Condition <- factor(pD.sub.p$Condition,levels=c("CTRL","4.5dG","9.5dG","14.5dG","1","2","3","4"))
-pD.sub.t <- pD.sub[pD.sub$Experiment=="Tumorigenesis",]
-pD.sub.t <- pD.sub.t[pD.sub.t$ptimeBin %in% c(1,2,3,4),]
-pD.sub.t$Condition <- pD.sub.t$ptimeBin
-
-p.p <- ggplot(arrange(pD.sub.p,Rankl), aes(x=UMAP1, y=UMAP2, color=Rankl)) +
-    geom_point(data=pD.sub[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-p.t <- ggplot(arrange(pD.sub.t,Rankl), aes(x=UMAP1, y=UMAP2, color=Rankl)) +
-    geom_point(data=pD.sub[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-plot_grid(p.p,p.t,ncol=1)
-
-sce.sub <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd")]
-pD.sub <- data.frame(colData(sce.sub))
-pD.sub <- dplyr::left_join(pD.sub,ptime)
-
-pD.sub$Rank <- logcounts(sce.sub)["Tnfrsf11a",]
-pD.sub.p <- pD.sub[pD.sub$Experiment=="Pregnancy",]
-pD.sub.p$Condition <- factor(pD.sub.p$Condition,levels=c("CTRL","4.5dG","9.5dG","14.5dG","1","2","3","4"))
-pD.sub.t <- pD.sub[pD.sub$Experiment=="Tumorigenesis",]
-pD.sub.t <- pD.sub.t[pD.sub.t$ptimeBin %in% c(1,2,3,4),]
-pD.sub.t$Condition <- pD.sub.t$ptimeBin
-
-p.p <- ggplot(arrange(pD.sub.p,Rank), aes(x=UMAP1, y=UMAP2, color=Rank)) +
-    geom_point(data=pD.sub[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-p.t <- ggplot(arrange(pD.sub.t,Rank), aes(x=UMAP1, y=UMAP2, color=Rank)) +
-    geom_point(data=pD.sub[,c("UMAP1","UMAP2")], color="grey80",size=.3) +
-    geom_point(size=.5) +
-    facet_wrap(~Condition, nrow=1) +
-    scale_color_viridis(option="B")
-
-plot_grid(p.p,p.t,ncol=1)
-```
-
-
 ## Csn2 expression precedes Rankl expression in BRCA1 animals
 The plot shows the expression of Csn2 (in Lps/Av) and Rankl in hormone sensing cells.
 The fact that we see substantial Csn2 expression in BRCA1 animals before we see levels above WT NP Rankl levels in Hs cells suggests that Rankl is a secondary event.
 ```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
-colData(sce.full) <- DataFrame(dplyr::left_join(data.frame(colData(sce.full)),ptime))
-sce.full$Condition[grepl("WKBR",sce.full$Condition)] <- sce.full$ptimeBin[grepl("WKBR",sce.full$Condition)]
-sce.full$Condition[grepl("CTRL",sce.full$Condition)] <- "WTYoung"
-sce.full$Condition[grepl("CBLA1|CBLT",sce.full$Condition)] <- "WTOld"
-sce.full$Condition <- factor(sce.full$Condition, levels=c("WTYoung","WTOld","4.5dG","9.5dG","14.5dG",
-							  "1","2","3","4"))
-
-
 sce.full$CT <- as.character(sce.full$CellTypesFinal)
 sce.full$CT[sce.full$CT %in% c("Lp","Avd")] <- "LpAv"
 sce.full$CT <- as.factor(sce.full$CT)
-
-fplot <- data.frame(colData(sce.full[,sce.full$CT %in% c("LpAv","Hs")]))
-
-fplot$Csn2 <- logcounts(sce.full[,sce.full$CT %in% c("LpAv","Hs")])["Csn2",]
-fplot$Rankl <- logcounts(sce.full[,sce.full$CT %in% c("LpAv","Hs")])["Igf2",]
-fplot$Expression <- fplot$Csn2
-fplot$Expression[fplot$CT=="Hs"] <- fplot$Rankl[fplot$CT=="Hs"]
-fplot$CT <- droplevels(fplot$CT)
-levels(fplot$CT) <- c("Hs","Lp-Av")
-ggplot(fplot, aes(x=Sample,y=Expression))+
-    geom_violin() +
-    geom_jitter(size=.3) +
-    facet_grid(CT~Condition,scales="free") +
-    theme(strip.text.x = element_text(size=12, face="bold") ,
-          strip.text.y = element_text(size=12, face="bold"),
-          strip.background = element_rect(colour="black", fill="white"),
-	  axis.text.x = element_blank())
-ggsave(paste0(outdr,"Igf2-Csn2-Violin-Plot.pdf"),width=12,height=4)
 
 ### With multiple genes
 genesAv <- c("Csn2","Csn1s1","Csn1s2a","Wap","Glycam1")
@@ -338,6 +252,7 @@ ggplot(out.long[out.long$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),],
     ylab("")
 ggsave(paste0(outdr,"MultipleGenes-Bubble-Plot_Pregnancy.pdf"),width=6.77,height=3.27)
 
+
 ggplot(out.long[out.long$Condition %in% c("WTOld","1","2","3","4"),], aes(x=SampleID, y=Gene, color=Mean, size=Frequency)) +
     geom_point() +
     scale_color_gradient2(high="red",limits=c(0,1)) + ##,mid="orange") +
@@ -356,7 +271,84 @@ ggplot(out.long[out.long$Condition %in% c("WTOld","1","2","3","4"),], aes(x=Samp
     xlab("") +
     ylab("")
 ggsave(paste0(outdr,"MultipleGenes-Bubble-Plot_Tumorigenesis.pdf"),width=6.77,height=3.27)
+```
 
+### The same as line plot?
+```{r, fig.width=12, fig.height=4, warning=FALSE, message=FALSE}
+genesAv <- c("Csn2","Wap")
+genesHs <- c("Igf2","Tnfsf11")
+
+getMtx <- function(m,markers,grps) {
+    require(reshape2)
+    mtx <- data.frame(numeric(length(markers)))
+    colnames(mtx) <- levels(factor(grps))[1]
+    mtx.freq <- mtx
+    for (cond in levels(factor(grps))) {
+	expr <- rowMeans(m[markers,grps==cond])
+	expr.freq <- rowMeans(m[markers,grps==cond]>0)
+	colname <- cond
+	mtx[,colname] <- expr
+	mtx.freq[,colname] <- expr.freq
+    }
+    mtx <- as.matrix(mtx)
+    mtx.freq <- as.matrix(mtx.freq)
+    rownames(mtx.freq) <- rownames(mtx) <- markers
+    mtx <- mtx/rowMax(mtx)
+    mtx.long <- melt(mtx,value.name="Mean")
+    mtx.freq <- melt(mtx.freq,value.name="Frequency")
+    mtx.long$Frequency <- mtx.freq$Frequency * 100
+    return(mtx.long)
+}
+
+out.Av <- getMtx(assay(sce.full[,sce.full$CT=="LpAv"],"logcounts"), genesAv,
+       colData(sce.full[,sce.full$CT=="LpAv"])$SampleID)
+
+out.Hs <- getMtx(assay(sce.full[,sce.full$CT=="Hs"],"logcounts"), genesHs,
+       colData(sce.full[,sce.full$CT=="Hs"])$SampleID)
+
+out.long <- rbind(out.Av, out.Hs)
+colnames(out.long) <- c("Gene","SampleID","Mean","Frequency")
+
+add <- data.frame(colData(sce.full))[,c("SampleID","Condition","ptime")] %>%
+    group_by(SampleID,Condition,ptime) %>%
+    summarize() %>%
+    ungroup()
+
+add2 <- data.frame("Gene"=c(genesAv,genesHs),
+		   "CellType"=c(rep("LpAv",length(genesAv)),
+				rep("Hs",length(genesHs))))
+
+out.long <- dplyr::left_join(out.long,add)
+out.long <- dplyr::left_join(out.long,add2)
+
+out.long$Experiment <- ifelse(out.long$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),
+			      "Pregnancy",
+			      "Tumourigenesis")
+out.long$Xaxis <- ifelse(out.long$Experiment=="Pregnancy",as.numeric(out.long$Condition)-1,
+			     as.numeric(out.long$ptime))
+out.long$Xaxis[out.long$Xaxis==2] <- 4.5
+out.long$Xaxis[out.long$Xaxis==3] <- 9.5
+out.long$Xaxis[out.long$Xaxis==4] <- 14.5
+out.long$Xaxis[is.na(out.long$Xaxis)] <- 0
+
+ggplot(out.long, aes(x=Xaxis, y=Mean,  group=Gene,color=Gene)) +
+    geom_point() +
+    geom_smooth(se=FALSE,aes(lty=CellType),lwd=2) +
+   # scale_color_distiller(palette="Spectral") +
+    theme_pub() +
+    theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
+	  axis.text=element_text(size=14),
+	  legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text.x = element_text(size=12, face="bold") ,
+	  strip.text.y = element_text(size=12, face="bold"),
+	  strip.background = element_rect(colour="black", fill="white"),
+	  )+
+    facet_grid(~Experiment,scales="free",space="free_y") +
+    scale_color_manual(values=c("#6BAED6","#FEE0D2","#FC9272","#08519C")) +
+    xlab("") +
+    ylab("")
+ggsave(paste0(outdr,"CsnRanklRegressionPlot.pdf"),width=9.61,height=5.87)
 ```
 
 ## Alveogenesis is not hormonally driven

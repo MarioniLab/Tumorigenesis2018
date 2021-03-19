@@ -442,7 +442,7 @@ renameForPlot <- function(fctr) {
 	     "Ec 1","Ec 2","Ec 3","Ec 4",
 	     "Pericytes 1","Pericytes 2",
 	     "Tam 1", "Tam 2",
-	     "MdC 1","MdC 2","MdC 3","Lp2")
+	     "MdC 1","MdC 2","MdC 3","Lm")
     out <- plyr::mapvalues(strng,frm,too)
     if(is.factor(fctr)) {
 	lvls <- levels(fctr)

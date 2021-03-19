@@ -222,7 +222,7 @@ for (cond in conds) {
 # igraph::plot.igraph(igr, layout=layout.circle(igr), edge.curved=TRUE,
 #                     edge.width=ew)
 library(pheatmap)
-pheatmap(sumlist[["14dG"]]-sumlist[["4dG"]],
+pheatmap(sumlist[["9dG"]]-sumlist[["4dG"]],
 	 #          cluster_cols=FALSE,
 	 #      WTOld    cluster_rows=FALSE,
 	 clustering_method="ward.D2",
@@ -274,14 +274,212 @@ pheatmap(sumtot,
 	 legend=FALSE)
 dev.off()
 
+
 int <- lapply(comn, function(LRP) {
 		    dff <- intlist4[[LRP]]-intlist1[[LRP]]
-		    out <- dff["Hs","Avd"]>0 | dff["Avd","Hs"]>0
+		    out <- dff["Lp","Avd"]>0 | dff["Avd","Lp"]>0
 		    out
 	 }
 		    )
 names(int) <- comn
 int <- unlist(int)
 int <- int[int]
-plotComGraphs(i.list=i.list,LRP=names(int)[12])
+plotComGraphs(i.list=i.list,LRP=names(int)[26])
+
+int <- lapply(comn, function(LRP) {
+		    dff <- intlist4[[LRP]]-intlist1[[LRP]]
+		    out <- dff["Hs","Avd"]<0 | dff["Avd","Hs"]<0
+		    out
+	 }
+		    )
+names(int) <- comn
+int <- unlist(int)
+int <- int[int]
+plotComGraphs(i.list=i.list,LRP=names(int)[8])
+plotComGraphs(i.list=i.list,LRP="TNFSF11:TNFRSF11A")
+plotComGraphs(i.list=i.list,LRP="TNFSF4:TNFRSF4")
+plotComGraphs(i.list=i.list,LRP="SPP1:CD44")
+
+# For the ones that are not common
+int <- lapply(only4, function(LRP) {
+		    dff <- intlist4[[LRP]]
+		    out <- dff["Mo3","Avd"]>0 | dff["Avd","Mo3"]>0
+		    out
+	 }
+		    )
+names(int) <- only4
+int <- unlist(int)
+int <- int[int]
+plotComGraphs(i.list=i.list,LRP=names(int)[1])
+
+plotComGraphs(i.list=i.list["bin1"],LRP="SPP1:CD44")
+
+#Get in the colors
+library(scran)
+pD <- data.frame(colData(readRDS("../../data/Integrated/Robjects/SCE_combined_celltypes.rds")))
+cols <- levels(pD$Colors)
+names(cols) <- levels(pD$CellTypesFinal)
+
+altPlot <- function(i.list,LRP,cond, onlyEpithelium=FALSE,colscheme=cols) {
+    require(ggraph)
+    lrp <- LRP
+    il <- i.list[[cond]]
+    # Trying alternative plots
+    wa <- il$weight_array
+    lr <- il$ligand_receptor_pair_df
+    m <- wa[,,lrp]
+    dm <- COMUNET:::calc_degrees(weight_array=m)
+    dm <- COMUNET:::array2matrix(dm)
+    ordr <- levels(factor(colnames(m)))
+    ordr[ordr=="Basal"] <- "Bsl1"
+    colnames(m) <- renameForPlot(colnames(m))
+    rownames(m) <- renameForPlot(rownames(m))
+    if (onlyEpithelium) {
+	m <- m[c("Avd","Lp","Basal","Hs"),c("Avd","Lp","Basal","Hs")]
+    }
+    igr <- igraph::graph.adjacency(m, mode="directed", weighted=TRUE)
+    # Width
+    edge.width <- (E(igr)$weight/max(E(igr)$weight)) * 2.5
+    ggraph(igr, layout="linear", circular=TRUE) +
+	geom_edge_arc(aes(start_cap = label_rect(node1.name), end_cap = label_rect(node2.name),
+			  width=weight),
+		       arrow = arrow(type = "closed", length = unit(3, 'mm')),
+		       color="grey50",
+		       strength=5) +
+	geom_edge_loop(aes(start_cap = label_rect(node1.name),
+			   end_cap = label_rect(node2.name),
+			   span=90, direction=90, strength=.3),color="grey50",
+		       arrow = arrow(type = "closed", length = unit(3, 'mm'))) +
+	geom_node_point(size=9,pch=21,aes(fill=name),color="black",stroke=1) +
+	geom_node_text(aes(label = name), 
+		       size = 9, 
+		       vjust = 1.3) +
+	theme_void() +
+        coord_cartesian(xlim=c(-1.2,1.3), ylim=c(-1.2,1.2)) +
+	scale_edge_width_continuous(range=c(.5,2)) +
+	scale_fill_manual(values=unname(colscheme[ordr])) +
+	ggtitle(paste0(LRP," in ",cond)) +
+       guides(edge_width = FALSE,
+	      fill=FALSE) 
+}
+
+altPlot(i.list,"SPP1:CD44","bin1")
+ggsave("../../data/figures/Figure4/Spp1_bin1.pdf")
+altPlot(i.list,"SPP1:CD44","WTOld")
+ggsave("../../data/figures/Figure4/Spp1_WTOld.pdf")
+
+altPlot(i.list,"TNFSF11:TNFRSF11A","9dG")
+ggsave("../../data/figures/Figure4/Rank_9dG.pdf")
+altPlot(i.list,"TNFSF11:TNFRSF11A","bin4")
+ggsave("../../data/figures/Figure4/Rank_bin4.pdf")
+
+altPlot(i.list,"IGF2:IGF2R","bin4")
+ggsave("../../data/figures/Figure4/Igf2_bin4.pdf")
+altPlot(i.list,"IGF2:IGF2R","9dG")
+ggsave("../../data/figures/Figure4/Igf2_9dG.pdf")
+
+# On special request by the boss
+altPlot(i.list,"LIF:LIFR","bin1")
+ggsave("../../data/figures/Figure4/Lif_bin1.pdf",width=9,height=9)
+
+altPlot(i.list,"LIF:LIFR","bin4")
+ggsave("../../data/figures/Figure4/Lif_bin4.pdf",width=9,height=9)
+
+altPlot(i.list,"FGF1:FGFR1","bin1")
+ggsave("../../data/figures/Figure4/Fgf1_bin1.pdf",width=9,height=9)
+
+altPlot(i.list,"FGF1:FGFR1","bin4")
+ggsave("../../data/figures/Figure4/Fgf1_bin4.pdf",width=9,height=9)
+
+# alternative layouts
+# ggraph(igr, layout="linear", circular=TRUE) +
+#     geom_edge_arc(aes(alpha=..index..,
+#                       width=weight),
+#                    color="black",
+#                    strength=5) +
+#     geom_node_text(aes(label=name)) +
+#     theme_graph() +
+#     scale_edge_width_continuous(range=c(.5,2)) +
+#     scale_edge_alpha('Edge direction', guide = 'edge_direction') +
+#    guides(edge_width = FALSE) 
+# 
+# ggraph(igr, layout="circle") +
+#     geom_edge_fan(aes(start_cap = label_rect(node1.name), end_cap = label_rect(node2.name),
+#                       width=weight),
+#                    arrow = arrow(type = "closed", length = unit(3, 'mm')),
+#                    color="grey50",
+#                    strength=5) +
+#     geom_edge_loop() +
+#     geom_node_text(aes(label=name)) +
+#     theme_graph() +
+#     scale_edge_width_continuous(range=c(.5,2)) +
+#     scale_edge_color_manual(values=cols) +
+#    guides(edge_width = FALSE) 
+
+```
+
+# Try different visualisations for sumtot
+```{r, message=FALSE,warning=FALSE}
+cellCellContactMap = function(pmat, order = NULL, exclude = NULL) {
+    # this function takes output from cellCellContact() 
+    # and gives a ggplot object of the graph
+    # out = mat_p_sym
+    # if order not given then perform hclust to get ordering
+    require(reshape)
+    require(ggplot2)
+    mat_p_df = melt(pmat)
+    colnames(mat_p_df) <- c("CellType_1","CellType_2", "NInteractions")
+    if (is.null(order)) {
+        hc = hclust(dist(pmat))
+        mat_p_df$CellType_1 <- factor(mat_p_df$CellType_1, levels = 
+                                            hc$labels[hc$order])
+        mat_p_df$CellType_2 <- factor(mat_p_df$CellType_2, levels = 
+                                            hc$labels[hc$order])
+    } else {
+        mat_p_df$CellType_1 <- factor(mat_p_df$CellType_1, levels = 
+                                            order)
+        mat_p_df$CellType_2 <- factor(mat_p_df$CellType_2, levels = 
+                                            order)
+    }
+    mat_p_df$keep = as.numeric(mat_p_df$CellType_1) >= as.numeric(mat_p_df$CellType_2) 
+    g = ggplot(subset(mat_p_df, keep & 
+                          (!CellType_1 %in% exclude) & 
+                          (!CellType_2 %in% exclude)),
+               aes(x = CellType_1, y = CellType_2, fill =NInteractions)) + 
+        geom_tile() +
+       # geom_text(aes(label = Sig, y = CellType_2 - 0.025), size = 20) +
+        # geom_point(pch = "*", size = 10, data = subset(mat_p_df, Sig == "*" & keep)) +
+        theme_classic() +
+        theme(axis.line = element_blank()) +
+        theme(axis.ticks = element_blank()) +
+        # scale_y_continuous(position = "right") +
+        scale_y_discrete(position = "right") +
+        theme(axis.text = element_text(size = 14)) +
+        theme(axis.title = element_blank()) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        coord_fixed() +
+        # guides(fill = guide_legend(title = "")) +
+        scale_fill_gradient2(high ="#9E0142",
+			     mid = "white",
+			     low = "#5182BB",
+			    # na.value = "white",
+                             midpoint = 0, #limits = c(0,1),
+                            # breaks = c(0,1),
+			    # labels = c("Segregated", "Integrated")
+			     ) +
+        theme(legend.position = "top") + 
+        theme(legend.text = element_text(size = 15)) +
+        theme(legend.key.width = unit(1, "in")) +
+        guides(fill = guide_colourbar(title.position = "top",
+                                      title = "",
+                                      title.hjust = 0.5,
+                                      ticks = FALSE,
+                                      reverse = TRUE)) +
+        NULL
+    # print(g)
+    return(g)
+}
+
+cellCellContactMap(sumtot)
+ggsave("../../data/figures/Figure4/ChangeInInteractionsTriangle.pdf")
 ```

@@ -71,6 +71,39 @@ p0 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
 	  legend.direction="horizontal",
 	  strip.text=element_text(size=14))
 p0
+
+sce.ani <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
+pD.ani <- data.frame(colData(sce.ani))
+
+library(gganimate)
+#pD.ani$ranktumorTime <- factor(rank(pD.ani$ptime,ties.method="min"))
+#levels(pD.ani$ranktumorTime) <- c(1:length(levels(pD.ani$ranktumorTime)))
+#tranTimes <- sort(as.numeric(as.character((unique(pD.ani$ptime)))))
+#tranTimes <- diff(tranTimes)
+pD.ani$ptimeBin[is.na(pD.ani$ptimeBin)] <- 0
+pD.ani$ptimeBin <- factor(pD.ani$ptimeBin)
+levels(pD.ani$ptimeBin) <- c("Wildtype","1","2","3","4","Tumour")
+
+p <- ggplot(pD.ani, aes(x=UMAP1, y=UMAP2, fill=CellTypesFinal)) +
+    geom_point(data=pD.ani[,c("UMAP1","UMAP2")],color="grey70",size=3,aes(fill=NULL)) +
+    geom_point(aes(group=CellTypesFinal),size=3,pch=21) +
+    #     geom_density_2d(color="black") +
+    transition_states(ptimeBin,
+		      transition_length=1,
+#		      transition_length=2,
+		      state_length=3,
+		      wrap=FALSE) +
+    labs(title = 'Stage: {closest_state}') +
+    scale_fill_manual(values=levels(pD.ani$Colors)) +
+    enter_fade() +
+    exit_fade() +
+    ease_aes("cubic-in-out") +
+    theme_void() +
+    theme(legend.position="none",
+	  plot.title=element_text(size=45,face="bold",margin=margin(t=120,b=-100)))
+
+p.anim <- animate(p,width=1100,height=1100)
+anim_save("fancyUMAP.gif",animation=p.anim)
 ```
 
 
@@ -126,6 +159,20 @@ ggplot(pD, aes(x=UMAP1, y=UMAP2, fill=CellTypesFinal)) +
 
 ggsave(paste0(outdr,"CellTypesUMAP.png"),dpi=dpi)
 
+pD.full <- data.frame(colData(sce.full))
+ggplot(pD.full, aes(x=UMAP1, y=UMAP2, fill=CellTypesFinal)) +
+    geom_point_rast(size=1.8,pch=21,stroke=.2,color="black") +
+    scale_fill_manual(values=levels(pD$Color)) +
+    theme_void() +
+    theme(legend.position="none")
+ggsave(paste0(outdr,"CellTypesUMAP_FullData.png"),dpi=dpi)
+
+# ggplot(pD, aes(x=UMAP1, y=UMAP2, fill=Batch)) +
+#     geom_point_rast(size=1.8,pch=21,stroke=.2,color="black") +
+#     theme_void() +
+#     theme(legend.position="none")
+
+
 # With Annotation
 X <- model.matrix(~0+pD$CellTypesFinal)
 colnames(X) <- levels(pD$CellTypesFinal)
@@ -133,12 +180,16 @@ X <- t(t(X)/colSums(X))
 celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD[,c("UMAP1","UMAP2")])))
 celltyp_ctrs$CellType <- rownames(celltyp_ctrs)
 
+source("../functions.R")
+celltyp_ctrs$CellType <- renameForPlot(celltyp_ctrs$CellType)
+
 ggplot(pD, aes(x=UMAP1, y=UMAP2, color=CellTypesFinal)) +
     geom_point_rast(size=.3, dpi=dpi) +
     scale_color_manual(values=levels(pD$Color)) +
     geom_text_repel(data=celltyp_ctrs,aes(label=CellType,color=NULL)) +
+    theme_void() +
     theme(legend.position="none")
-ggsave(paste0(outdr,"CellTypesUMAP_WithLabels.png"),dpi=dpi)
+ggsave(paste0(outdr,"CellTypesUMAP_WithLabels.pdf"),dpi=dpi)
 
 ```
 
@@ -202,6 +253,12 @@ ggsave(paste0(outdr,"UMAP_TumorAndPregnancyCellGroups.png"), p, dpi=dpi)
 library(RColorBrewer)
 col.t <- brewer.pal(n=6,"PuRd")[5]
 col.p <- brewer.pal(n=5,"GnBu")[5]
+
+pDall <- group_by(pDall, Condition) %>%
+	sample_n(3000) %>%
+	ungroup()
+set.seed(123)
+pDall <- pDall[sample(1:nrow(pDall),nrow(pDall)),]
 
 p <- ggplot(pDall, aes(x=UMAP1, y=UMAP2)) +
     geom_point_rast(aes(fill=Experiment), size=1.8,dpi=900,pch=21,stroke=.2) +

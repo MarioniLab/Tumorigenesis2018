@@ -264,7 +264,7 @@ ggplot(pcs.all, aes(x=PC1, y=as.numeric(Age))) +
     ylab("Age [w]") +
     theme_pub()
     #     geom_text(x=-50,y=47.5,label=paste0("Cor: ",cr))
-ggsave(paste0(outsup,"CorrelationWithAge.pdf"),pseudotimeplt_byCond)
+ggsave(paste0(outsup,"CorrelationWithAge.pdf"))
 ```
 
 ## MPA-DMBA Data
