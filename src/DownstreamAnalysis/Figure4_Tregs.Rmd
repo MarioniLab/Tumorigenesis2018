@@ -1,0 +1,448 @@
+---
+title: "Response of ILCs and Tregs to tumour development"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Introduciton
+
+After the meeting on the 7th, we decided to look specifically for the effect of tumor development on ILCs and Tregs.
+I am looking here into various things, all of which I will perform independently for ILCs and Tregs:
+
+1. Differences betweeen Tregs in old WT and the earliest time point.
+2. Differences in Gene Expression throughout tumour development.
+
+## The dataset
+Just as a reminder, the samples were grouped into 5 stages, where 1-4 represent the pre-tumour stages and group 5 represents fully developed tumours. The control group here consists of aged WT animals.
+```{r, message=FALSE,warning=FALSE,fig.width=12,fig.height=9}
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(Matrix)
+library(umap)
+library(dplyr)
+library(viridis)
+library(ggrastr)
+library(ggrepel)
+library(edgeR)
+library(pheatmap)
+source("../functions.R")
+theme_set(theme_cowplot())
+
+sce.full <- readRDS("../../data/Integrated/Robjects/SCE_combined_final.rds")
+
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
+rmgenes <- rownames(rD)[!rD$KeepForHvg]
+rmgenes <- rownames(sce.full)[rownames(sce.full) %in% rmgenes]
+
+sce <- sce.full[,sce.full$CellTypesFinal %in% c("Tregs","ILCs")]
+
+dirtyPlot <- function(fplot,title){
+    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
+    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
+    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
+    if (sum(sub.gse$Fisher >=2) == 0) {
+	print(paste("No significantly enriched GO terms for ",title))
+    } else{
+    sub.gse <- sub.gse[sub.gse$Fisher >= 2,]
+    sub.gse %>%
+	mutate(hitsPerc=(Significant/sum(fplot$fFDR==0.001))*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() +
+				ggtitle(title)
+    }
+}
+
+pD <- data.frame(colData(sce.full))
+pD <- pD[pD$Condition %in% c("WTOld","1","2","3","4","5"),]
+pD$GroupColors <- plyr::mapvalues(pD$Groups,
+				levels(pD$Groups),
+				c("#00BFFF","#37A055","#3787C0","#F78757","#FF4E03",
+				  "#737373","#800080"))
+p0 <- ggplot(pD, aes(x=UMAP1, y=UMAP2)) +
+    geom_point(data=pD[,c("UMAP1","UMAP2")], color="grey80",size=.1,alpha=.2) +
+    geom_point(size=.1, aes(color=Groups)) +
+    facet_wrap(~Condition,nrow=2) +
+    scale_color_manual(values=levels(pD$GroupColors)) +
+    guides(colour=guide_legend(title.position="top", override.aes = list(size=3))) +
+    theme_void() +
+    theme(legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text=element_text(size=14))
+p0
+```
+
+# Overview
+
+## Tregs
+I recompute here the UMAPs for the two cell types independently and color by time points. Strongs effects in gene expression of any of the conditions should show off here already.
+
+- The tregs look quite blobby
+- The labels are the "centroid" for each of the different conditions
+```{r, fig.width=10, fig.height=10, warning=FALSE, message=FALSE}
+sce.t <- sce[,sce$CellTypesFinal=="Tregs"]
+# I additionally only keep samples with a minimum number of cells, as I will use samples for DE testign
+keep <- names(which(table(sce.t$SampleID) > 10))
+sce.t <- sce.t[,sce.t$SampleID %in% keep]
+
+mnn.my <- reducedDim(sce.t,"corrected")
+set.seed(42)
+ump <- umap(mnn.my, random.state=42)
+sce.t$Group.UMAP1 <- ump$layout[,1]
+sce.t$Group.UMAP2 <- ump$layout[,2]
+pD.t <- data.frame(colData(sce.t))
+pD.t <- droplevels(pD.t)
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+X <- model.matrix(~0+pD.t$Condition)
+colnames(X) <- levels(pD.t$Condition)
+X <- t(t(X)/colSums(X))
+celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD.t[,c("Group.UMAP1","Group.UMAP2")])))
+celltyp_ctrs$Condition <- rownames(celltyp_ctrs)
+
+library(viridis)
+p0 <- ggplot(pD.t, aes(x=Group.UMAP1, y=Group.UMAP2, color=Condition)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    geom_label(data=celltyp_ctrs, aes(x=Group.UMAP1, y=Group.UMAP2, label=Condition, color=NULL)) +
+    ggtitle("Tregs")
+p0
+```
+
+## ILC
+- There is a bit more structure in the ILC compartment but might be due to the potential subtypes e.g. ILC2 and ILC3 as Tim mentioned.
+- The fact that the centroids of the tumor timepoints are a bit shifted might already be indicative of changes in cell states during tumour development.
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.i <- sce[,sce$CellTypesFinal=="ILCs"]
+
+# I additionally only keep samples with a minimum number of cells, as I will use samples for DE testign
+keep <- names(which(table(sce.t$SampleID) > 10))
+sce.i <- sce.i[,sce.i$SampleID %in% keep]
+
+mnn.my <- reducedDim(sce.i,"corrected")
+set.seed(42)
+ump <- umap(mnn.my, random.state=42)
+sce.i$Group.UMAP1 <- ump$layout[,1]
+sce.i$Group.UMAP2 <- ump$layout[,2]
+pD.i <- data.frame(colData(sce.i))
+pD.i <- droplevels(pD.i)
+```
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+X <- model.matrix(~0+pD.i$Condition)
+colnames(X) <- levels(pD.i$Condition)
+X <- t(t(X)/colSums(X))
+celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD.i[,c("Group.UMAP1","Group.UMAP2")])))
+celltyp_ctrs$Condition <- rownames(celltyp_ctrs)
+
+library(viridis)
+p0 <- ggplot(pD.i, aes(x=Group.UMAP1, y=Group.UMAP2, color=Condition)) +
+    geom_point() +
+    ggtitle("Cluster") +
+    geom_label(data=celltyp_ctrs, aes(x=Group.UMAP1, y=Group.UMAP2, label=Condition, color=NULL)) +
+    ggtitle("ILCs")
+p0
+```
+
+### Some of the suggested ILC2/3 markers
+This is just to confirm that the underlying structure is driven by cell types.
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+library(schex)
+reducedDim(sce.i,"Group.UMAP") <- ump$layout[,1:2]
+sce.i <- make_hexbin(sce.i, nbins = 25, 
+		   dimension_reduction = "Group.UMAP", use_dims=c(1,2))
+
+pltGEX <- function(sce.full, gene) {
+    plot_hexbin_gene(sce.full, gene=gene, type="logcounts",
+		     action="mean") +
+	theme_void() +
+	theme(legend.position="none") +
+	scale_fill_viridis(option="C") +
+	ggtitle(gene)
+}
+ilc2 <- c("Rora","Icos","Gata3","Il5","Il13","Ccr8","Il17re")
+ilc3 <- c("Rorc","Il23r","Il17a","Il17f")
+plist <- list()
+for (gn in ilc2){
+    plist[[gn]] <- pltGEX(sce.i,gn)
+}
+plot_grid(plotlist=plist)
+plist <- list()
+for (gn in ilc3){
+    plist[[gn]] <- pltGEX(sce.i,gn)
+}
+plot_grid(plotlist=plist)
+```
+
+# 1. Differential Expression against wild type
+## Tregs
+In the first test I take the cells from stage 1 and compare them to the cells from wild type animals.
+```{r, warning=FALSE, message=FALSE}
+sce.sub <- sce.t[,sce.t$Condition %in% c("1","WTOld")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")])
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+levels(y$samples$Condition) <- c("WT","WKBR")
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_text_repel(data=top[top$FDR<0.1,], aes(label=Gene),size=7) +
+    theme(text=element_text(size=12)) +
+    xlab("logFC") +
+    ylab("-log10(FDR)") +
+    theme_pub() 
+ggsave("../../data/figures/Figure4/TregsDE.pdf")
+```
+
+```{r, fig.width=4, fig.height=7, warning=FALSE, message=FALSE}
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+
+ordr <- arrange(y$samples,Group)$SampleID
+genes <- top$Gene[top$FDR<0.1]
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 gaps_col=c(2),
+	 fontsize=8
+	 )
+```
+
+```{r, warning=FALSE, message=FALSE}
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC>0,0.001,1)
+dirtyPlot(top, title="Up in Stage 1")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+dirtyPlot(top, title="Up in WT")
+```
+
+
+## ILC
+This again compares ILC in stage 1 to the wild type cells
+```{r, warning=FALSE, message=FALSE}
+sce.sub <- sce.i[,sce.i$Condition %in% c("1","WTOld")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")])
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+levels(y$samples$Condition) <- c("WT","WKBR")
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_label_repel(data=top[top$FDR<0.1,][1:30,], aes(label=Gene)) +
+    theme(text=element_text(size=12)) +
+    xlab("logFC") +
+    ylab("-log10(FDR)")
+```
+
+```{r, fig.width=4, fig.height=7, warning=FALSE, message=FALSE}
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+
+ordr <- arrange(y$samples,Group)$SampleID
+genes <- top$Gene[top$FDR<0.1]
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+#	 gaps_col=c(2),
+	 fontsize=8
+	 )
+```
+
+```{r, warning=FALSE, message=FALSE}
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC>0,0.001,1)
+dirtyPlot(top, title="Up in Stage 1")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+dirtyPlot(top, title="Up in WT")
+```
+
+
+# 2. Differential expression over time
+
+Two notes here:
+
+- Csn2, Csn1s1, Csn1s2a are milk proteins and not expressed in either Tregs nor ILCs, they appear as up-regulated as a result of ambient RNA from the high number of alveolar cells in the samples
+
+- Ignore the scale of the logFC, it entirely depends on the encoding of the pseudotime. Right now a logFC of 0.1 corresponds to a logFC in expression of roughly 5-6 between the earliest samples and the last samples. I will ultimately adjust the encoding.
+
+## Tregs
+
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+
+sce.sub <- sce.t[,sce.t$Condition %in% c("1","2","3","4")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")])
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+y$samples$Condition <- as.numeric(y$samples$Condition)
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ ptime,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_label_repel(data=top[top$FDR<0.1,], aes(label=Gene)) +
+    geom_hline(yintercept=1) +
+    ggtitle("DE w time")
+```
+
+```{r, fig.width=4, fig.height=7, warning=FALSE, message=FALSE}
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+
+ordr <- arrange(y$samples,ptime)$SampleID
+genes <- top$Gene[top$FDR<0.1]
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 gaps_col=c(5,8,11),
+	 fontsize=8
+	 )
+```
+
+```{r, warning=FALSE, message=FALSE}
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC>0,0.001,1)
+dirtyPlot(top, title="Up with time")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+dirtyPlot(top, title="Down with time")
+```
+
+## ILC
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+sce.sub <- sce.i[,sce.i$Condition %in% c("1","2","3","4")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")])
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+y$samples$Condition <- as.numeric(y$samples$Condition)
+keep <- filterByExpr(y, group=y$samples$Condition)
+y <- y[keep,]
+
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ ptime,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_label_repel(data=top[top$FDR<0.1,], aes(label=Gene)) +
+    geom_hline(yintercept=1) +
+    ggtitle("DE w time")
+```
+
+```{r, fig.width=4, fig.height=7, warning=FALSE, message=FALSE}
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")],
+			      average=TRUE,
+			      use_exprs_values="logcounts")
+
+ordr <- arrange(y$samples,ptime)$SampleID
+genes <- top$Gene[top$FDR<0.1]
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+	 gaps_col=c(5,8,11),
+	 fontsize=8
+	 )
+```
+
+```{r, warning=FALSE, message=FALSE}
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC>0,0.001,1)
+dirtyPlot(top, title="Up with time")
+top$fFDR <- ifelse(top$FDR<0.1 & top$logFC<0,0.001,1)
+dirtyPlot(top, title="Down with time")
+```

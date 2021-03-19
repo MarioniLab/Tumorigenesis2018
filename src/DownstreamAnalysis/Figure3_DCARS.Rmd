@@ -1,0 +1,436 @@
+---
+title: "Testing for Diff Correlation with Csn2"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+```{r, message=FALSE,warning=FALSE}
+library(slingshot)
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(Matrix)
+library(umap)
+library(dplyr)
+library(viridis)
+library(ggrastr)
+source("../functions.R")
+source("../TwoSampleDCARS.R")
+theme_set(theme_cowplot())
+
+sce.full <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
+sce.full <- sce.full[,sce.full$MajorGroups=="Epithelial"]
+
+sce <- sce.full[,sce.full$Experiment=="Tumorigenesis"]
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
+rmgenes <- rownames(rD)[!rD$KeepForHvg]
+rmgenes <- rownames(sce)[rownames(sce) %in% rmgenes]
+outdr <- "../../data/figures/Figure2/"
+```
+
+# DCARS
+What genes are differentially correlated between Csn2 and everything else during gestation and tumorigenesis 
+in Lps and Avd.
+
+```{r, message=FALSE,warning=FALSE}
+sce.lp <- sce.full[,sce.full$CellTypesFinal %in% c("Lp","Avd") & sce.full$Condition!="WTOld"]
+cd <- data.frame(colData(sce.lp))
+cd <- droplevels(cd)
+colData(sce.lp) <- DataFrame(cd)
+dcars <- readRDS("../../data/Downstream/DCARS_OUT.rds")
+#dcars <- dcars[!dcars$gene2 %in% rmgenes,]
+head(dcars[order(dcars$normFDR),],20)
+dcars$Gene <- as.character(dcars$gene2)
+dcars <- dcars[!dcars$Gene %in% rmgenes,]
+library(schex)
+sce.lp <- make_hexbin(sce.lp, nbins = 50, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+pltGEX <- function(sce.full, gene) {
+    plot_hexbin_gene(sce.full, gene=gene, type="logcounts",
+		     action="mean") +
+	theme_void() +
+	theme(legend.position="none") +
+	scale_fill_viridis(option="C") +
+	ggtitle(gene)
+}
+sce.p <- sce.lp[,sce.lp$Experiment=="Pregnancy"]
+sce.t <- sce.lp[,sce.lp$Experiment=="Tumorigenesis"]
+sce.p <- make_hexbin(sce.p, nbins = 50, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+sce.t <- make_hexbin(sce.t, nbins = 50, 
+		   dimension_reduction = "UMAP", use_dims=c(1,2))
+
+plot_grid(pltGEX(sce.p,"Cebpb"),pltGEX(sce.t, "Cebpb"))
+
+
+fplot <- dcars
+fplot$Gene <- unlist(lapply(strsplit(rownames(fplot),"_"), function(x) x[[2]]))
+fplot <- fplot[order(fplot$normFDR),]
+
+library(ggrepel)
+ggplot(fplot[1:40,], aes(x=cors_first_obs, y=cors_second_obs)) +
+    geom_point(data=fplot[,c("cors_first_obs", "cors_second_obs")], size=.1, color="grey30") +
+    geom_point() +
+    geom_label_repel(aes(label=Gene)) +
+    geom_abline(slope=1) +
+    xlab("Csn2 Correlation in Pregnancy") +
+    ylab("Csn2 Correlation in Tumorigenesis") +
+    coord_fixed()
+
+tf <- read.table("~/Cambridge/MammaryGlandDev/repo/data/miscData/TFcheckpoint_WithENSID.tsv",
+		 header=TRUE, sep="\t", stringsAsFactors=FALSE)
+tfs <- rownames(rD[rD$ID %in% tf$ensembl_gene_id,])
+
+
+topTfs <- fplot[,]
+tfs <- c("Nfkb1","Rel","Cebpb","Bcl11a","Sox10","Foxc1","Elf5","Foxq1","Foxl1",
+	 "Barx2","Gata3","Gata6","Klf5","Ehf","Grhl1","Hey2")
+topTfs <- topTfs[topTfs$Gene %in% tfs,]
+library(ggrepel)
+ggplot(topTfs, aes(x=cors_first_obs, y=cors_second_obs)) +
+    geom_point(data=fplot[,c("cors_first_obs", "cors_second_obs")], size=.1, color="grey30") +
+    geom_point() +
+    geom_label_repel(aes(label=Gene)) +
+    geom_abline(slope=1) +
+    xlab("Csn2 Correlation in Pregnancy") +
+    ylab("Csn2 Correlation in Tumorigenesis") +
+    coord_fixed()
+```
+
+## Example Genes
+```{r, message=FALSE,warning=FALSE}
+cd$Csn2Expr <- logcounts(sce.lp)["Csn2",]
+cd$Expr <- logcounts(sce.lp)["Lpl",]
+ggplot(cd, aes(x=Csn2Expr,y=Expr)) +
+    geom_point(size=.3,color="grey40") +
+    geom_density_2d(adjust=6,color="black",lty="dashed") +
+    geom_smooth(method="lm",color="black") +
+    facet_wrap(~Experiment)
+
+genes <- c("Cebpb","Olah","Cd36","Lpl","Acbd7","Lcn2","Eno1","Pdia6","Ndrg1","Atp6v1c2")
+library(RColorBrewer)
+col.t <- brewer.pal(n=6,"PuRd")[5]
+col.p <- brewer.pal(n=5,"GnBu")[5]
+
+for (gene in genes) {
+    cd$Expr <- logcounts(sce.lp)[gene,]
+    cor1 <- dcars[paste0("Csn2_",gene),"cors_first_obs"]
+    cor1 <- sprintf("rho == %0.2f", cor1)
+    cor2 <- dcars[paste0("Csn2_",gene),"cors_second_obs"]
+    cor2 <- sprintf("rho == %0.2f", cor2)
+    dmy <- data.frame(Csn2Expr=c(2.2,2.2),
+		      Expr=c(max(cd$Expr)-0.05,max(cd$Expr)-0.05),
+		      Experiment=c("Pregnancy","Tumorigenesis"),
+		      Correlation=c(cor1,cor2))
+
+    # Bandwidth for the density2d (set to non-zero if estimated zero)
+    require(MASS)
+    bws <- c(ifelse(bandwidth.nrd(cd$Csn2Expr) == 0, 0.1, bandwidth.nrd(cd$Csn2Expr)),
+		ifelse(bandwidth.nrd(cd$Expr) == 0, 0.1, bandwidth.nrd(cd$Expr)))
+
+
+    p0 <- ggplot(cd, aes(x=Csn2Expr,y=Expr)) +
+        geom_rect(data = cd[cd$Experiment=="Pregnancy",][1,], aes(fill=Experiment), xmin=-Inf,xmax=Inf,
+            ymin=-Inf,ymax=Inf, alpha=0.35) +
+        geom_rect(data = cd[cd$Experiment=="Tumorigenesis",][1,], aes( fill = Experiment) ,xmin=-Inf,xmax=Inf,
+            ymin=-Inf,ymax=Inf, alpha=0.35) +
+	geom_point(size=.9, color="black") +
+	geom_density_2d(color="grey95",lty="dashed",h=bws*6,lwd=1.2) +
+	facet_wrap(~Experiment) +
+        geom_smooth(method="lm",color="grey95",lwd=2.0) +
+	geom_text(data=dmy,aes(label=Correlation),size=9,fontface="bold",parse=TRUE) +
+	theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
+	      axis.text=element_text(size=20),
+	      axis.title=element_text(size=16,face="bold"),
+	      #               strip.text.x = element_text(size=12, face="bold") ,
+	      #               strip.text.y = element_text(size=12, face="bold"),
+	      strip.text.x = element_blank() ,
+	      strip.text.y = element_text(),
+	      strip.background = element_rect(fill="white"),# colour="black"),
+	      axis.line=element_line(size=1.5),
+	      axis.ticks=element_line(size=1.5),
+	      legend.position="none") +
+	xlab("") +
+	ylab("") +
+	scale_fill_manual(values=c(col.p,col.t)) 
+    p0
+
+    ggsave(paste0("../../data/figures/Figure3/Csn2_", gene, ".png"),p0, width=7,height=3.95,dpi=600)
+}
+```
+
+
+
+## Correcting the trend 
+### Version 1 fit a trend and take residual
+- Don't like this, this generates funky stuff on the extremes (e.g. Csn1s1, which has similar correlation in both)
+```{r, message=FALSE,warning=FALSE}
+ft <- lm(cors_second_obs ~ cors_first_obs, data=dcars)
+
+ggplot(dcars, aes(x=cors_first_obs ,y=cors_second_obs)) +
+    geom_point(size=.3) +
+    geom_smooth(method="lm") 
+dcars$Residual <- ft$residuals
+fplot <- dcars[order(abs(dcars$Residual),decreasing=TRUE),]
+
+library(ggrepel)
+ggplot(fplot[1:40,], aes(x=cors_first_obs, y=cors_second_obs)) +
+    geom_point(data=fplot[,c("cors_first_obs", "cors_second_obs")], size=.1, color="grey30") +
+    geom_point() +
+    geom_smooth(data=fplot[,c("cors_first_obs", "cors_second_obs")], method="lm") +
+    geom_label_repel(aes(label=Gene)) +
+    geom_hline(yintercept=0) +
+    geom_vline(xintercept=0) +
+    xlab("Csn2 Correlation in Pregnancy") +
+    ylab("Csn2 Correlation in Tumorigenesis") +
+    coord_fixed(1)
+```
+### Version 2 rescale to median 0
+
+```{r, message=FALSE,warning=FALSE}
+dcars$first_dist_to_med <- dcars$cors_first_obs - median(dcars$cors_first_obs)
+dcars$second_dist_to_med <- dcars$cors_second_obs - median(dcars$cors_second_obs)
+dcars$dist_med <-dcars$first_dist_to_med - dcars$second_dist_to_med
+
+fplot <- dcars[order(abs(dcars$dist_med), decreasing=TRUE),]
+fplot.sig <- fplot[fplot$normFDR<0.001 & abs(fplot$dist_med)>0.3,]
+genes <- c(fplot.sig[order(fplot.sig$dist_med),][1:10,"Gene"],fplot.sig[order(-fplot.sig$dist_med),][1:10,"Gene"])
+genes <- c(genes,"Cebpb","Olah","Glycam1")
+ggplot(fplot.sig, aes(x=first_dist_to_med, y=second_dist_to_med)) +
+    geom_point_rast(data=fplot[,c("first_dist_to_med", "second_dist_to_med")], size=.1, color="grey30",dpi=400) +
+    geom_point_rast(dpi=400) +
+    geom_hline(yintercept=0, lty="dashed", size=1.2) +
+    geom_vline(xintercept=0, lty="dashed", size=1.2) +
+    geom_text_repel(data=fplot.sig[fplot.sig$Gene %in% genes,], aes(label=Gene),size=6) +
+    geom_abline(slope=1, lty="dashed",size=1.2, color="grey50") +
+    xlab("Distance from median Csn2 correlation in Pregnancy") +
+    ylab("Distance from median Csn2 Correlation in Tumorigenesis") +
+    scale_x_continuous(breaks=c(-0.5,0,0.5)) +
+    scale_y_continuous(breaks=c(-0.5,0,0.5)) +
+    coord_fixed(1) +
+    theme(axis.line=element_line(size=1.5),
+	  axis.ticks=element_line(size=1.5),
+	  axis.text=element_text(size=20),
+	  axis.title=element_text(size=16))
+ggsave("../../data/figures/Figure3/DCARS.pdf",dpi=400)
+
+
+# Out for thesis -.-
+out <- fplot.sig
+out <- out[,c("Gene","cors_first_obs","nonzero_cortest_first_pval",
+	      "cors_second_obs","nonzero_cortest_second_pval",
+	      "corsdiff_obs","first_dist_to_med","second_dist_to_med",
+	      "dist_med","normFDR")]
+out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval",
+       "normFDR")] <- -log10(out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")])
+out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")][out[,c("nonzero_cortest_first_pval","nonzero_cortest_second_pval","normFDR")]==Inf] <- 300
+out[,-1] <- round(out[,-1],2)
+colnames(out) <- c("Gene", "Cor. in #1",
+		   "P Value in #1",
+		   "Cor. in #2",
+		   "P Value in #2",
+		   "Difference in Cor.",
+		   "Distance to median Cor. #1",
+		   "Distance to median Cor. #2",
+		   "Difference in median Cor.",
+		   "FDR")
+
+write.csv(out,"../../data/figures/Figure3/DC_Genes.csv")
+
+#Second interesting opposed cor in pregnancy
+#Int1 is included in int2
+fplot$int2 <- fplot$normFDR<0.01 & abs(fplot$dist_med)>0.3 & sign(fplot$first_dist_to_med)!=sign(fplot$second_dist_to_med)
+
+ggplot(fplot[fplot$int1,], aes(x=first_dist_to_med, y=second_dist_to_med)) +
+    geom_point(data=fplot[,c("first_dist_to_med", "second_dist_to_med")], size=.1, color="grey30") +
+    geom_point() +
+    geom_label_repel(aes(label=Gene)) +
+    geom_abline(slope=1, lty="dashed") +
+    geom_hline(yintercept=0) +
+    geom_vline(xintercept=0) +
+    xlab("Distance from median Csn2 correlation in Pregnancy") +
+    ylab("Distance from median Csn2 Correlation in Tumorigenesis") +
+    coord_fixed(1)
+```
+
+```{r, message=FALSE,warning=FALSE}
+genes <- fplot.sig$Gene
+library(RColorBrewer)
+col.t <- brewer.pal(n=6,"PuRd")[5]
+col.p <- brewer.pal(n=5,"GnBu")[5]
+
+pltlist <- list()
+for (gene in genes) {
+    cd$Expr <- logcounts(sce.lp)[gene,]
+    cor1 <- dcars[paste0("Csn2_",gene),"cors_first_obs"]
+    cor1 <- sprintf("rho == %0.2f", cor1)
+    cor2 <- dcars[paste0("Csn2_",gene),"cors_second_obs"]
+    cor2 <- sprintf("rho == %0.2f", cor2)
+    dmy <- data.frame(Csn2Expr=c(1.5,1.5),
+		      Expr=c(max(cd$Expr)+.01,max(cd$Expr)+.01),
+		      Experiment=c("Pregnancy","Tumorigenesis"),
+		      Correlation=c(cor1,cor2))
+
+    # Bandwidth for the density2d (set to non-zero if estimated zero)
+    require(MASS)
+    bws <- c(ifelse(bandwidth.nrd(cd$Csn2Expr) == 0, 0.1, bandwidth.nrd(cd$Csn2Expr)),
+		ifelse(bandwidth.nrd(cd$Expr) == 0, 0.1, bandwidth.nrd(cd$Expr)))
+
+
+    pltlist[[gene]] <- ggplot(cd, aes(x=Csn2Expr,y=Expr)) +
+        geom_rect(data = cd[cd$Experiment=="Pregnancy",][1,], aes(fill=Experiment), xmin=-Inf,xmax=Inf,
+            ymin=-Inf,ymax=Inf, alpha=0.35) +
+        geom_rect(data = cd[cd$Experiment=="Tumorigenesis",][1,], aes( fill = Experiment) ,xmin=-Inf,xmax=Inf,
+            ymin=-Inf,ymax=Inf, alpha=0.35) +
+	geom_point(size=.9, color="black") +
+	geom_density_2d(color="grey95",lty="dashed",h=bws*6,lwd=1.2) +
+	facet_wrap(~Experiment) +
+        geom_smooth(method="lm",color="grey95",lwd=.8) +
+	geom_text(data=dmy,aes(label=Correlation),size=5,fontface="bold",parse=TRUE) +
+	theme(panel.grid.major=element_line(colour="grey80",size=0.1,linetype="dashed"),
+	      axis.text=element_text(size=14),
+	      axis.title=element_text(size=16,face="bold"),
+	      #               strip.text.x = element_text(size=12, face="bold") ,
+	      #               strip.text.y = element_text(size=12, face="bold"),
+	      strip.text.x = element_blank() ,
+	      strip.text.y = element_text(),
+	      strip.background = element_rect(fill="white"),# colour="black"),
+	      axis.line=element_line(size=1.5),
+	      axis.ticks=element_line(size=1.5),
+	      legend.position="none") +
+	xlab("") +
+	ylab("") +
+	ggtitle(gene) +
+	scale_fill_manual(values=c(col.p,col.t)) 
+}
+plot_grid(plotlist=pltlist[120:137])
+```
+
+## Enrichment of top left corner
+```{r, message=FALSE,warning=FALSE, eval=FALSE}
+
+
+# fplot <- dcars
+# library(ggrepel)
+# ggplot(fplot[fplot$intTum,][1:30,], aes(x=cors_first_obs, y=cors_second_obs)) +
+#     geom_point(data=fplot[,c("cors_first_obs", "cors_second_obs")], size=.1, color="grey30") +
+#     geom_point() +
+#     geom_label_repel(aes(label=Gene)) +
+#     geom_abline(slope=1) +
+#     xlab("Csn2 Correlation in Pregnancy") +
+#     ylab("Csn2 Correlation in Tumorigenesis")
+# 
+
+dirtyPlot <- function(fplot){
+    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
+    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
+    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
+    sub.gse %>%
+	mutate(hitsPerc=(Significant/200)*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				ylim(c(0,50)) +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() 
+}
+fplot$Gene <- as.character(fplot$gene2)
+fplot$fFDR <- ifelse(fplot$int2 & fplot$second_dist_to_med>0,
+		     0.0001,1)
+dirtyPlot(fplot)
+```
+
+## Enrichment of bottom left corner
+```{r, message=FALSE,warning=FALSE, eval=FALSE}
+fplot$Gene <- as.character(fplot$gene2)
+fplot$fFDR <- ifelse(fplot$int2 & fplot$second_dist_to_med<0,
+		     0.0001,1)
+dirtyPlot(fplot)
+```
+
+### DE Analysis of high Csn2 cells 
+```{r, fig.width=7, fig.height=7, warning=FALSE, message=FALSE}
+cells <- cd$barcode[cd$Csn2Expr>5]
+colnames(sce.full) <- sce.full$barcode
+sce.sub <- sce.full[,cells]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+keep <- table(sce.sub$SampleID)>=30
+keep <- names(keep[keep])
+smrzd <- aggregateAcrossCells(sce.sub[,sce.sub$SampleID %in% keep],
+			      id=colData(sce.sub[,sce.sub$SampleID %in% keep])[,c("SampleID")])
+library(edgeR)
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+keep <- filterByExpr(y, group=y$samples$Experiment)
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~ Experiment,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+summary(decideTests(res, p.value=0.01))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+library(ggrepel)
+
+p2 <- ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[1:50,], size=.9)+
+    geom_label_repel(data=top[1:30,], aes(label=Gene)) +
+    theme(text=element_text(size=12)) +
+    xlab("logFC") +
+    ylab("-log10(FDR)")
+
+
+dirtyPlot <- function(fplot){
+    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
+    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
+    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
+    sub.gse %>%
+	mutate(hitsPerc=(Significant/200)*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				ylim(c(0,80)) +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() 
+}
+
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC>3,0.001,1)
+p0 <- dirtyPlot(top) + ggtitle("Up in Tum")
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC< -2,0.001,1)
+p1 <- dirtyPlot(top) + ggtitle("Up in WT")
+plot_grid(p2,p0,p1)
+```

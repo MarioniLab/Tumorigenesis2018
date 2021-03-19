@@ -1,0 +1,97 @@
+---
+title: "Figure 1"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Main messages
+
+In this file I will produce all the figure files for F1.
+
+__Experimental setup of Tumorigenesis experiment__
+
+- There is a need to understand pre-cancerous changes
+- Sampling animals from a TNBC model pre-tumor formation and performing scRNAseq
+
+__Inferring biological time__
+
+- Age does not capture disease progression
+- Inference of tumor time and grouping into stages
+
+__Compositional changes during tumor development__
+
+- Facetted UMAP as Overview
+- Possible Ribbonplot / Barplot
+I will keep the code and the plots for all of this in this document.
+Including some further discussions.
+
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(edgeR)
+library(Matrix)
+library(ggrepel)
+library(ggrastr)
+library(viridis)
+theme_set(theme_cowplot())
+
+sce.full <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
+
+rD <- rowData(readRDS("../../data/Tumorigenesis/Robjects/SCE.rds"))
+rmgenes <- rD$uniq[!rD$KeepForHvg]
+outdr <- "../../data/figures/Supplementary/"
+```
+
+
+# UMAP
+```{r, message=FALSE,warning=FALSE,fig.width=9,fig.height=6}
+pD <- data.frame(colData(sce.full))
+p <- ggplot(pD, aes(x=UMAP1, y=UMAP2, color=Batch)) +
+    geom_point(size=.1) +
+    theme_void() +
+    theme(legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text=element_text(size=14)) +
+    scale_color_brewer(palette="Set1") +
+    guides(colour = FALSE)
+ggsave(paste0(outdr,"BatchCor.png"), dpi=400)
+```
+
+```{r, message=FALSE,warning=FALSE}
+dec.full <- modelGeneVar(sce.full)
+hvgs.full <- getTopHVGs(dec.full)
+hvgs.full <- !hvgs.full %in% rmgenes
+
+# PCA
+set.seed(42)
+sce <- denoisePCA(sce.full, technical=dec.full,
+		       subset.row=hvgs.full,
+		       BSPARAM=BiocSingular::IrlbaParam())
+pcs <- reducedDims(sce)[["PCA"]]
+library(umap)
+ump <- umap(pcs, random_state=42)
+
+pD$UMAP1Uncor <- ump$layout[,1]
+pD$UMAP2Uncor <- ump$layout[,2]
+p1 <- ggplot(pD, aes(x=UMAP1Uncor, y=UMAP2Uncor, color=Batch)) +
+    geom_point(size=.1) +
+    theme_void() +
+    theme(legend.position="bottom",
+	  legend.direction="horizontal",
+	  strip.text=element_text(size=14)) +
+    scale_color_brewer(palette="Set1") +
+    guides(colour = guide_legend(override.aes = list(size=6)))
+ggsave(paste0(outdr,"BatchUnCor.png"), dpi=400)
+```

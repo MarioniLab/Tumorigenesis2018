@@ -1,0 +1,548 @@
+---
+title: "Immune Cells"
+author: "Karsten Bach"
+date: '`r Sys.Date()`'
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: hide
+---
+***
+
+# Load Data
+```{r, message=FALSE,warning=FALSE}
+library(scran)
+library(scater)
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(edgeR)
+library(Matrix)
+library(ggrepel)
+library(ggrastr)
+library(viridis)
+library(umap)
+source("../functions.R")
+theme_set(theme_cowplot())
+
+sce <- readRDS("../../data/Integrated//Robjects/SCE_combined_final.rds")
+
+sce$CellTypes <- renameForPlot(sce$CellTypesFinal)
+sce <- sce[,sce$MajorGroups=="Immune"]
+pD <- droplevels(data.frame(colData(sce)))
+```
+
+# Overview
+This the UMAP of all immune cells with the new annotation.
+```{r, message=FALSE,warning=FALSE}
+mnn.my <- reducedDim(sce,"corrected")
+set.seed(42)
+ump <- umap(mnn.my, random.state=42)
+pD$Group.UMAP1 <- sce$Group.UMAP1 <- ump$layout[,1]
+pD$Group.UMAP2 <- sce$Group.UMAP2 <- ump$layout[,2]
+reducedDim(sce,"Group.UMAP") <- data.frame(colData(sce)[,c("Group.UMAP1","Group.UMAP2")])
+
+X <- model.matrix(~0+pD$CellTypes)
+colnames(X) <- levels(factor(pD$CellTypes))
+X <- t(t(X)/colSums(X))
+celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD[,c("Group.UMAP1","Group.UMAP2")])))
+celltyp_ctrs$CellTypesFinal <- rownames(celltyp_ctrs)
+
+library(viridis)
+dpi <- 600
+p1 <- ggplot(pD, aes(x=Group.UMAP1, y=Group.UMAP2, fill=CellTypes)) +
+    geom_point_rast(size=1.8,dpi=dpi,pch=21,stroke=.2) +
+    scale_fill_manual(values=levels(pD$Colors)) +
+    theme_void() +
+    theme(legend.position="none",
+	  text=element_text(size=14)) 
+    
+p1 + geom_text_repel(data=celltyp_ctrs, aes(x=Group.UMAP1, y=Group.UMAP2, label=CellTypesFinal, fill=NULL),fontface="bold",color="dodgerblue")
+ggsave("../../data/figures/Figure4/ImmuneCellsUMAP.pdf",dpi=dpi)
+```
+
+## Separate for the blob of T-Cells/NK
+I did a separate UMAP for the group of T/NK cells as these were the most difficult to tease apart.
+```{r, message=FALSE,warning=FALSE}
+sce.t <- sce[,grepl("CD|Treg|NK|CTL|Cycling",sce$CellTypesFinal)]
+pD.t <- droplevels(data.frame(colData(sce.t)))
+mnn.my <- reducedDim(sce.t,"corrected")
+set.seed(42)
+ump <- umap(mnn.my, random.state=42)
+pD.t$Group.UMAP1 <- sce.t$Group.UMAP1 <- ump$layout[,1]
+pD.t$Group.UMAP2 <- sce.t$Group.UMAP2 <- ump$layout[,2]
+reducedDim(sce,"Group.UMAP") <- data.frame(colData(sce)[,c("Group.UMAP1","Group.UMAP2")])
+
+X <- model.matrix(~0+pD.t$CellTypes)
+colnames(X) <- levels(factor(pD.t$CellTypes))
+X <- t(t(X)/colSums(X))
+celltyp_ctrs <- data.frame(crossprod(X, as.matrix(pD.t[,c("Group.UMAP1","Group.UMAP2")])))
+celltyp_ctrs$CellTypesFinal <- rownames(celltyp_ctrs)
+
+library(viridis)
+p1 <- ggplot(pD.t, aes(x=Group.UMAP1, y=Group.UMAP2, fill=CellTypes)) +
+    geom_point(size=1.5,pch=21,stroke=.1) +
+    scale_fill_manual(values=levels(pD.t$Colors)) +
+    theme(legend.position="none",
+	  text=element_text(size=14))
+
+p1 + geom_text_repel(data=celltyp_ctrs, aes(x=Group.UMAP1, y=Group.UMAP2, label=CellTypesFinal, fill=NULL),fontface="bold",color="dodgerblue")
+```
+
+## Some Markers for the T/NK cells
+```{r, message=FALSE,warning=FALSE, fig.width=8, fig.height=8}
+library(schex)
+reducedDim(sce.t,"Group.UMAP") <- ump$layout[,1:2]
+sce.t <- make_hexbin(sce.t, nbins = 50, 
+		   dimension_reduction = "Group.UMAP", use_dims=c(1,2))
+
+pltGEX <- function(sce.full, gene) {
+    plot_hexbin_gene(sce.full, gene=gene, type="logcounts",
+		     action="mean") +
+    geom_text_repel(data=celltyp_ctrs, aes(x=Group.UMAP1, y=Group.UMAP2, label=CellTypesFinal, fill=NULL),fontface="bold",color="grey80") +
+	theme_void() +
+	theme(legend.position="none") +
+	scale_fill_viridis(option="C") +
+	ggtitle(gene)
+}
+
+genes <- c("Cd3d","Cd8a","Cd4","Klrb1c","Eomes","Mki67")
+plist <- list()
+for (gn in genes){
+    plist[[gn]] <- pltGEX(sce.t,gn)
+}
+plot_grid(plotlist=plist)
+plotExpression(sce.t,x="CellTypesFinal",features=genes) +
+    theme(axis.text.x=element_text(angle=45,hjust=1))
+```
+
+
+```{r, message=FALSE,warning=FALSE, eval=FALSE}
+# mrks <- findMarkers(sce,droplevels(sce$CellTypesFinal),
+#                     pval.type="all")
+# 
+# x <- data.frame(mrks[["TcCd83"]])
+# x <- x[,grepl("Tc",colnames(x))]
+# head(x,n=15)
+```
+
+# Markers for all cell types
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+smrzd <- aggregateAcrossCells(sce,ids=as.character(sce$CellTypes),
+			      use_exprs_values="logcounts",
+			      average=TRUE)
+
+ordr <- c("cDC1","cDC2","migDC","pDC","MdC 3","MdC 1","MdC 2","Mast cells",
+	  "Neutrophils","Mø 1","Mø 2","Mø 3","Tam 1","Tam 2",
+	  "CD8 T cells 1","CD8 T cells 2","CD8 T cells 3","CTLs","CD4 T cells 2","CD4 T cells 1","Tregs",
+	  "Cycling T","NK","ILCs","B cells","Plasma cells")
+genes <- c("Ptprc","Cd52","Laptm5",
+	   "Tyrobp","H2-Aa",
+	   "Xcr1","Wdfy4","Batf3",
+	   "Tnip3","Cd209a",
+	   "Ccl22","Il4i1","Ccr7",
+	   "Siglech",
+	   "Ear2","Fn1","Lpl","Ccl9",
+	   "Chil3","Vcan",
+	   "Adgre4","Fabp4","Treml4","Cd300e",
+	   "Cpa3",
+	   "S100a8",
+	   "Cd14","Adgre1",
+	   "Mrc1",
+	   "Cxcl2","Mmp12",
+	   "Arg1","Spp1","Ms4a7",
+	   "Hcst","Cd2",
+	   "Cd3d",
+	   "Cd8a","Sell",
+	   "Dapl1","Limd2","Cd27",
+	   "Gimap4",
+	   "Xcl1","Gzmb","Klra1",
+	   "Cd4","Frat2","Satb1","Foxp3","Ctla4",
+	   "Mki67","Top2a",
+	   "Eomes","Klrb1c","Klri2",
+	   "Rora","Icos","Il7r","Cxcr6","Cd163l1","Il23r",
+	   "Cd19","Pax5","H2-Ob","Fcmr","Jchain","Mzb1","Derl3")
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[genes,ordr]
+library(viridis)
+library(pheatmap)
+
+cairo_pdf("../../data/figures/Figure4/GEX.pdf",width=6,height=8)
+pheatmap(mtx,
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_rows=FALSE,
+	 cluster_cols=FALSE,
+#	 gaps_col=c(9,19,26,40),
+	 fontsize=8
+	 )
+dev.off()
+
+```
+
+# Composition
+## Myeloid
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+pD <- droplevels(data.frame(colData(sce[,sce$Groups=="Myeloid"])))
+sumry <- group_by(pD, Condition, CellTypesFinal) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+
+comb <- table(sumry$CellTypesFinal,sumry$Condition) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypesFinal"=rownames(missing.comb),
+		      "Condition"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+				as.character(unique(pD$CellTypesFinal)),
+				as.character(unique(pD$Colors)))
+
+# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypesFinal)))
+# names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+# sumry$CellTypesFinal <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+#                                    as.character(names(combi)),
+#                                    as.character(combi))
+
+sumry <- arrange(sumry, Condition, CellTypesFinal) %>%
+    group_by(Condition) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+sumry <- sumry[sumry$Condition!="5",]
+sumry$Experiment <- ifelse(sumry$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),"Pregnancy","Tumor")
+barplt <- ggplot(sumry, aes(x=Condition, y=frac, fill=CellTypesFinal)) +
+    geom_bar(stat="identity",color="black") +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("Tumortime Bin") +
+    ylab("Fraction of Cells") +
+    facet_wrap(~Experiment,scales="free_y") +
+    coord_flip()
+ggsave("../../data/figures/Figure4/MyleoidComposition.pdf",width=12.5,height=4.5)
+```
+
+## Macrophages
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+pD <- droplevels(data.frame(colData(sce[,sce$CellTypesFinal %in% c("Tam1","Tam2","Mo1","Mo2","Mo3")])))
+sumry <- group_by(pD, Condition, CellTypesFinal) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+
+comb <- table(sumry$CellTypesFinal,sumry$Condition) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypesFinal"=rownames(missing.comb),
+		      "Condition"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+				as.character(unique(pD$CellTypesFinal)),
+				as.character(unique(pD$Colors)))
+
+# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypesFinal)))
+# names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+# sumry$CellTypesFinal <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+#                                    as.character(names(combi)),
+#                                    as.character(combi))
+
+sumry <- arrange(sumry, Condition, CellTypesFinal) %>%
+    group_by(Condition) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+#sumry <- sumry[sumry$Condition!="5",]
+sumry$Experiment <- ifelse(sumry$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),"Pregnancy","Tumor")
+barplt <- ggplot(sumry, aes(y=Condition, x=frac, fill=CellTypesFinal)) +
+    geom_bar(stat="identity",color="black") +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("Tumortime Bin") +
+    ylab("Fraction of Cells") +
+    facet_grid(~Experiment,scales="free_x",space="free") +
+    coord_flip()
+
+ggsave("../../data/figures/Figure4/MoComposition.pdf",width=8,height=6)
+```
+## Macrophages
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+pD <- droplevels(data.frame(colData(sce[,sce$CellTypesFinal %in% c("Tam1","Tam2","Mo1","Mo2","Mo3")#)))
+				    &sce$Condition!="WTOld"])))
+pD$Condition <- as.character(pD$Condition)
+pD$Condition <- gsub("dG","",pD$Condition)
+pD$Condition[pD$Condition=="WTYoung"] <- 0
+#pD$Condition[pD$Condition=="WTOld"] <- 0.0000001
+pD$Condition[pD$Experiment=="Tumorigenesis"] <- pD$ptime[pD$Experiment=="Tumorigenesis"]
+sumry <- group_by(pD, Condition, CellTypesFinal) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+
+comb <- table(sumry$CellTypesFinal,sumry$Condition) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypesFinal"=rownames(missing.comb),
+		      "Condition"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+				as.character(unique(pD$CellTypesFinal)),
+				as.character(unique(pD$Colors)))
+
+# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypesFinal)))
+# names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+# sumry$CellTypesFinal <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+#                                    as.character(names(combi)),
+#                                    as.character(combi))
+
+sumry <- arrange(sumry, Condition, CellTypesFinal) %>%
+    group_by(Condition) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+
+sumry$Experiment <- ifelse(sumry$Condition %in% c(0,4.5,9.5,14.5),"Pregnancy","Tumor")
+
+rbn <- ggplot(sumry, aes(x=as.numeric(Condition),  fill=CellTypesFinal)) +
+    geom_ribbon(aes(ymin=cumfrac-frac, ymax=cumfrac),color="black") +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("Tumortime Bin") +
+    ylab("Fraction of Cells") +
+    facet_grid(~Experiment,scales="free_x") +
+    theme_pub() +
+    theme(panel.grid.major=element_blank())
+rbn
+ggsave("../../data/figures/Figure4/MoComposition_Ribbon.pdf",width=10.2,height=5.93)
+
+
+ggplot(sumry, aes(x=as.numeric(Condition),y=frac,  color=CellTypesFinal)) +
+    geom_point() +
+    geom_smooth(se=FALSE,method=lm,formula=y~splines::bs(x,3)) +
+    scale_color_manual(values=unique(sumry$Colors)) +
+    xlab("Tumortime Bin") +
+    ylab("Fraction of Cells") +
+    facet_grid(~Experiment,scales="free_x") +
+    theme_pub() 
+
+
+```
+
+
+
+# Composition
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+pD <- droplevels(data.frame(colData(sce[,sce$Groups=="Lymphoid"])))
+pD <- droplevels(pD[!pD$CellTypesFinal %in% c("BCells","NK","PlasmaCells","ILCs"),])
+sumry <- group_by(pD, Condition, CellTypesFinal) %>%
+    summarize(n=n()) %>%
+    mutate(frac=n/sum(n)) %>%
+    ungroup()
+
+comb <- table(sumry$CellTypesFinal,sumry$Condition) 
+missing.comb <- which(comb==0, arr.ind=TRUE)
+if (nrow(missing.comb)>0) {
+    add.missing <- data.frame("CellTypesFinal"=rownames(missing.comb),
+		      "Condition"=colnames(comb)[missing.comb[,"col"]],
+		      "frac"=0,
+		      "n"=0)
+    sumry <- rbind(sumry,add.missing)
+}
+
+sumry$Colors <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+				as.character(unique(pD$CellTypesFinal)),
+				as.character(unique(pD$Colors)))
+
+# combi <- unique(paste0(substr(pD$MajorGroups,1,3),"-",as.character(pD$CellTypesFinal)))
+# names(combi) <- unlist(lapply(strsplit(combi,"-"),function(x) x[[2]]))
+# sumry$CellTypesFinal <- plyr::mapvalues(as.character(sumry$CellTypesFinal),
+#                                    as.character(names(combi)),
+#                                    as.character(combi))
+
+sumry <- arrange(sumry, Condition, CellTypesFinal) %>%
+    group_by(Condition) %>%
+    mutate(cumfrac=cumsum(frac)) %>%
+    ungroup()
+
+sumry <- sumry[sumry$Condition!="5",]
+sumry$Experiment <- ifelse(sumry$Condition %in% c("WTYoung","4.5dG","9.5dG","14.5dG"),"Pregnancy","Tumor")
+barplt <- ggplot(sumry, aes(y=Condition, x=frac, fill=CellTypesFinal)) +
+    geom_bar(stat="identity",color="black") +
+    scale_fill_manual(values=unique(sumry$Colors)) +
+    xlab("Tumortime Bin") +
+    ylab("Fraction of Cells") +
+    facet_wrap(~Experiment,scales="free_x") +
+    coord_flip()
+
+ggsave("../../data/figures/Figure4/TCComposition.pdf",width=8,height=6)#),width=12.5,height=4.5)
+```
+
+# DE of Mo3 against other macrophages
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+sce.sub <- sce[,sce$CellTypesFinal=="Mo3" & sce$Condition %in% c("1","WTOld")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+smrzd <- aggregateAcrossCells(sce.sub,
+			      id=colData(sce.sub)[,c("SampleID")])
+y <- DGEList(counts=counts(smrzd),
+	     samples=colData(smrzd))
+levels(y$samples$Condition) <- c("WT","WKBR")
+keep <- rowSums(y$counts)>10
+y <- y[keep,]
+# Norm
+y <- calcNormFactors(y)
+mdl <- model.matrix(~Condition,y$samples)
+y <- estimateDisp(y, mdl)
+
+fit <- glmQLFit(y, mdl, robust=TRUE)
+res <- glmQLFTest(fit, coef=ncol(mdl))
+
+top <- topTags(res,n=nrow(y))$table
+top$Gene <- rownames(top)
+
+ggplot(top, aes(x=logFC, y=-log10(FDR))) +
+    geom_point(size=.5,color="grey80") +
+    geom_point(data=top[top$FDR<0.1,], size=.9)+
+    geom_text_repel(data=top[top$FDR<0.1,], aes(label=Gene),size=7) +
+    theme(text=element_text(size=12)) +
+    xlab("logFC") +
+    ylab("-log10(FDR)") +
+    theme_pub() 
+
+dirtyPlot <- function(fplot,title){
+    sub.gse <- quickGSE(fplot$Gene,fplot$fFDR)
+    sub.gse$Fisher[sub.gse$Fisher=="< 1e-30"] <- "1e-30"
+    sub.gse$Fisher <- -log10(as.numeric(sub.gse$Fisher))
+    if (sum(sub.gse$Fisher >=2) == 0) {
+	print(paste("No significantly enriched GO terms for ",title))
+    } else{
+    sub.gse <- sub.gse[sub.gse$Fisher >= 2,]
+    sub.gse %>%
+	mutate(hitsPerc=(Significant/sum(fplot$fFDR==0.001))*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() +
+				ggtitle(title)
+    }
+}
+
+top$fFDR <- ifelse(top$FDR<0.01 & top$logFC > 0,0.001,1)
+dirtyPlot(top, title="Up")
+```
+
+```{r, message=FALSE,warning=FALSE, fig.width=8,fig.height=10}
+sce.sub <- sce[,sce$CellTypesFinal %in% c("Mo1","Mo2","Mo3","Tam1","Tam2") & 
+	       sce$Condition %in% c("1","2","3","4","5")]
+sce.sub$Condition <- droplevels(sce.sub$Condition)
+sce.sub$CellTypesFinal <- droplevels(sce.sub$CellTypesFinal)
+
+markers <- findMarkers(sce.sub, groups=sce.sub$CellTypesFinal, pval.type="all",
+		       subset.row=rowMeans(logcounts(sce.sub))>.1,
+		       direction="up")
+
+
+dirtyFun <- function(markers,ct="Mo1") {
+    require(org.Mm.eg.db)
+    require(topGO)
+    topDiffGenes <- function(allScore) { # topGO requirement..this is so useless..
+    return(allScore < 0.1 & allScore >= 0)
+    }
+    alG <- markers[[ct]]$FDR
+    names(alG) <- rownames(markers[[ct]])
+
+
+    # prepare Data for topGO
+    GO.data <- new("topGOdata", description="Lib GO",ontology="MF", allGenes=alG, 
+		   annot=annFUN.org, mapping="org.Mm.eg.db",geneSelectionFun=topDiffGenes,
+		   nodeSize=5, ID="symbol")
+    # Fisher
+    result.classic <- runTest(GO.data, statistic="fisher",algorithm="classic")
+    output <- GenTable(GO.data, Fisher=result.classic, #KS=result.ks, orderBy="KS",
+		       orderBy="Fisher",topNodes=50, numChar=300)
+    output$Term <- factor(output$Term, levels=unique(rev(output$Term)))
+
+    output$Fisher[output$Fisher=="< 1e-30"] <- "1e-30"
+    output$Fisher <- -log10(as.numeric(output$Fisher))
+    output <- output[output$Fisher >= 2,]
+    output %>%
+	mutate(hitsPerc=(Significant/sum(alG<0.1))*100) %>% 
+			    ggplot(aes(y=hitsPerc, 
+				       x=Term, 
+				       fill=Fisher
+				       )) +
+				geom_col() +
+				expand_limits(x=0) +
+				labs(y="Hits (%)", x="GO term", colour="p value", size="Count") +
+				geom_text(aes(label=Term),y=1,
+					  hjust=0,
+					  color="grey30") +
+				scale_fill_viridis(begin=1,end=0) +
+				theme(axis.text.y=element_blank(),
+				      axis.ticks.y=element_blank()) +
+				coord_flip() +
+				ggtitle(ct)
+}
+
+p <- dirtyFun(markers,ct="Mo1")
+p0 <- dirtyFun(markers,ct="Mo2")
+p1 <- dirtyFun(markers,ct="Mo3")
+p2 <- dirtyFun(markers,ct="Tam1")
+p3 <- dirtyFun(markers,ct="Tam2")
+plot_grid(p,p0,p1,p2,p3,nrow=2)
+
+ggsave("../../data/figures/Supplementary/Mo1_GEO.pdf",p)
+ggsave("../../data/figures/Supplementary/Mo2_GEO.pdf",p0)
+ggsave("../../data/figures/Supplementary/Mo3_GEO.pdf",p1)
+ggsave("../../data/figures/Supplementary/Tam1_GEO.pdf",p2)
+ggsave("../../data/figures/Supplementary/Tam2_GEO.pdf",p3)
+
+
+smrzd <- aggregateAcrossCells(sce.sub,ids=as.character(sce.sub$CellTypesFinal),
+			      use_exprs_values="logcounts",
+			      average=TRUE)
+
+gens <- lapply(markers,function(x) rownames(x[x$FDR<0.01,])[1:min(c(5,sum(x$FDR<0.01)))])
+gens <- unique(c(unlist(gens),"Trem2","Lgmn","Apoe","Mrc1","Adgre1"))
+mtx <- logcounts(smrzd)
+mtx <- mtx/rowMax(mtx)
+mtx <- mtx[gens,]
+library(viridis)
+library(pheatmap)
+
+cairo_pdf("../../data/figures/Supplementary/GEX_Mo.pdf",width=4,height=14)
+
+pheatmap(t(mtx),
+	 color=inferno(n=100,begin=0,end=1),
+	 cluster_cols=TRUE,
+	 cluster_rows=TRUE,
+	 angle_col="45",
+	 treeheight_col=FALSE,
+	 treeheight_row=FALSE,
+	 fontsize=12
+	 )
+
+dev.off()
+```
