@@ -1,7 +1,7 @@
 # Scripts
 This folder contains all scripts that were used in the analysis:
 
-- [Tumorigenesis/](Tumourigenesis/) contains the scripts to process the 10x data of the samples from BRCA1 animals.
+- [Tumorigenesis/](Tumorigenesis/) contains the scripts to process the 10x data of the samples from BRCA1 animals.
 - [PregnancyTimecourse/](PregnancyTimecourse/) contains the scripts to process the 10x data of the samples from the pregnancy time course.
 - [Integrated/](Integrated/) contains all scripts used for the integration and combined cell type calling of the two data sets.
 - [DownstreamAnalysis/](DownstreamAnalysis/) contains the scripts used to produce the figures.
